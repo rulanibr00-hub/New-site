@@ -5,9 +5,25 @@ import { claimTelegramJob, finishTelegramJob, getTelegramCredentials, type Teleg
 import { formatMoney } from "./tours";
 
 type TelegramCredentials = NonNullable<ReturnType<typeof getTelegramCredentials>>;
+const deliveryErrors = {
+  rate_limit: "Telegram временно ограничил отправку.",
+  invalid_bot: "Telegram не принял токен бота. Проверьте токен.",
+  chat_denied: "Telegram не принял сообщение. Проверьте ID чата и доступ бота к нему.",
+  temporary: "Telegram временно недоступен.",
+  timeout: "Telegram не ответил вовремя.",
+  network_error: "Не удалось подключиться к Telegram. Проверьте доступ сервера к api.telegram.org.",
+  attempts_exhausted: "Автоматические попытки отправки закончились.",
+  credentials_unreadable: "Не удалось прочитать сохранённый токен. Проверьте настройки Telegram.",
+};
+
 type SendResult =
   | { ok: true }
-  | { ok: false; code: string; message: string; retryable: boolean; waitSeconds?: number };
+  | { ok: false; code: keyof typeof deliveryErrors; retryable: boolean; waitSeconds?: number };
+
+export function describeTelegramDeliveryError(code: string) {
+  return Object.hasOwn(deliveryErrors, code) ? deliveryErrors[code as keyof typeof deliveryErrors]
+    : "Не удалось доставить уведомление.";
+}
 
 const botApi = "https://api.telegram.org";
 const sendTimeoutMs = 8000;
@@ -121,18 +137,18 @@ async function sendMessage({ token, chatId }: TelegramCredentials, text: string)
     const status = successfulStatus ? reply?.error_code : httpStatus;
     if (status === 429) {
       const waitSeconds = secondsFrom(reply?.parameters?.retry_after) ?? secondsFrom(retryAfter);
-      return { ok: false, code: "rate_limit", message: "Telegram временно ограничил отправку.", retryable: true, waitSeconds };
+      return { ok: false, code: "rate_limit", retryable: true, waitSeconds };
     }
     if (status === 401 || status === 404) {
-      return { ok: false, code: "invalid_bot", message: "Telegram не принял токен бота. Проверьте токен.", retryable: false };
+      return { ok: false, code: "invalid_bot", retryable: false };
     }
     if (status === 400 || status === 403) {
-      return { ok: false, code: "chat_denied", message: "Telegram не принял сообщение. Проверьте ID чата и доступ бота к нему.", retryable: false };
+      return { ok: false, code: "chat_denied", retryable: false };
     }
-    return { ok: false, code: "temporary", message: "Telegram временно недоступен.", retryable: true };
+    return { ok: false, code: "temporary", retryable: true };
   } catch {
-    if (signal.aborted) return { ok: false, code: "timeout", message: "Telegram не ответил вовремя.", retryable: true };
-    return { ok: false, code: "network_error", message: "Не удалось подключиться к Telegram. Проверьте доступ сервера к api.telegram.org.", retryable: true };
+    if (signal.aborted) return { ok: false, code: "timeout", retryable: true };
+    return { ok: false, code: "network_error", retryable: true };
   }
 }
 
@@ -143,7 +159,7 @@ export async function sendTelegramTest(): Promise<{ ok: boolean; message: string
 
     const result = await sendMessage(credentials, "Тестовое уведомление «Тоо Туры». Telegram подключён.");
     return result.ok ? { ok: true, message: "Тестовое сообщение отправлено в Telegram." }
-      : { ok: false, message: result.message };
+      : { ok: false, message: describeTelegramDeliveryError(result.code) };
   } catch {
     return { ok: false, message: "Не удалось прочитать настройки Telegram." };
   }

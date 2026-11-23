@@ -5,10 +5,19 @@ import {
   bookingStatusLabels, formatBookingTime, formatDepartureDate, getBooking, inboxHref, isBookingId, readBookingFilters,
 } from "@/lib/admin-booking-store";
 import { storageErrorCode } from "@/lib/storage.mjs";
+import { describeTelegramDeliveryError } from "@/lib/telegram-notifications";
+import { getTelegramBookingDelivery } from "@/lib/telegram-store";
 import { formatMoney } from "@/lib/tours";
-import { changeBookingStatus } from "./actions";
+import { changeBookingStatus, retryBookingTelegram } from "./actions";
 
 export const metadata = { title: "Заявка" };
+
+const telegramStatusLabels = {
+  pending: "В очереди",
+  sent: "Отправлено",
+  failed: "Не удалось отправить",
+  canceled: "Отменено после изменения настроек",
+};
 
 type BookingPageProps = {
   params: Promise<{ id: string }>;
@@ -19,6 +28,8 @@ function messageForError(code: unknown) {
   if (code === "conflict") return "Заявка уже обработана. Ниже указан её текущий статус.";
   if (code === "invalid") return "Выберите подтверждение или отклонение заявки.";
   if (code === "storage") return "Не удалось обновить заявку. Попробуйте ещё раз.";
+  if (code === "telegram_unavailable") return "Повторная отправка сейчас недоступна. Проверьте статус и настройки Telegram.";
+  if (code === "telegram_storage") return "Не удалось вернуть уведомление Telegram в очередь. Попробуйте ещё раз.";
 }
 
 export default async function BookingDetailPage({ params, searchParams }: BookingPageProps) {
@@ -43,6 +54,16 @@ export default async function BookingDetailPage({ params, searchParams }: Bookin
   }
 
   if (!booking) notFound();
+
+  let delivery: ReturnType<typeof getTelegramBookingDelivery> | undefined;
+  try {
+    delivery = getTelegramBookingDelivery(id);
+  } catch (error) {
+    console.error("Не удалось прочитать статус уведомления Telegram.", storageErrorCode(error));
+  }
+  const retryable = delivery?.status === "failed" || delivery?.status === "canceled";
+  const sending = (delivery?.lease_until ?? 0) > Date.now();
+  const deliveryError = delivery?.error_code ? describeTelegramDeliveryError(delivery.error_code) : null;
 
   return (
     <main className="admin-page">
@@ -87,6 +108,42 @@ export default async function BookingDetailPage({ params, searchParams }: Bookin
           <div><dt>Телефон или почта</dt><dd>{booking.contact}</dd></div>
         </dl>
         <p>Свяжитесь с клиентом, чтобы сообщить решение по заявке.</p>
+      </section>
+
+      <section className="admin-panel admin-booking-status" aria-labelledby="booking-telegram">
+        <h2 id="booking-telegram">Уведомление в Telegram</h2>
+        {delivery ? (
+          <>
+            <p><strong>{delivery.status ? telegramStatusLabels[delivery.status] : "Уведомление не ставилось в очередь"}</strong></p>
+            {deliveryError && <p className="admin-muted">{deliveryError}</p>}
+            {delivery.status === "pending" && deliveryError && !sending && (
+              <p className="admin-muted">Следующая попытка пройдёт автоматически.</p>
+            )}
+            {delivery.status === "canceled" && sending && (
+              <p className="admin-muted">Дождитесь результата предыдущей попытки.</p>
+            )}
+            {retryable && delivery.enabled === 1 && !sending && (
+              <form action={retryBookingTelegram} className="admin-actions">
+                <input type="hidden" name="id" value={booking.id} />
+                {filters.status && <input type="hidden" name="status" value={filters.status} />}
+                {filters.after && <input type="hidden" name="after" value={filters.after} />}
+                <button type="submit" className="admin-secondary" aria-describedby="telegram-retry-note">Повторить отправку</button>
+                <p id="telegram-retry-note" className="admin-muted">Сообщение уйдёт в текущий чат из настроек Telegram.</p>
+              </form>
+            )}
+            {retryable && delivery.enabled === 0 && (
+              <div className="admin-actions">
+                <Link className="admin-secondary" href="/admin/settings">К настройкам Telegram</Link>
+                <p className="admin-muted">Включите уведомления, чтобы повторить отправку.</p>
+              </div>
+            )}
+            {(delivery.status === "pending" || sending) && (
+              <div className="admin-actions">
+                <a className="admin-secondary" href={inboxHref(filters, id)}>Обновить статус</a>
+              </div>
+            )}
+          </>
+        ) : <p className="admin-error" role="alert">Не удалось загрузить статус доставки. Обновите страницу.</p>}
       </section>
     </main>
   );

@@ -55,6 +55,13 @@ type DeliveryOutcome =
   | { status: "retry"; retryAt: number; error: string }
   | { status: "failed"; error: string };
 
+type BookingDelivery = {
+  enabled: 0 | 1;
+  status: "pending" | "sent" | "failed" | "canceled" | null;
+  error_code: string | null;
+  lease_until: number | null;
+};
+
 export class TelegramSettingsError extends Error {}
 
 const initialized = new WeakSet<DatabaseSync>();
@@ -234,8 +241,9 @@ export function saveTelegramSettings(input: SettingsInput, expectedRevision: num
       WHERE id = 1 RETURNING enabled, chat_id, sealed_token, revision, route_version
     `).get(enabled, chatId, sealed, routing) as SettingsRow;
     if (routeChanged) {
+      // Active requests can finish, but no more work is claimed on the previous route.
       db.prepare(`
-        UPDATE telegram_outbox SET status = 'canceled', lease = NULL, lease_until = NULL
+        UPDATE telegram_outbox SET status = 'canceled'
         WHERE status = 'pending' AND route_version <> ?
       `).run(routing);
     }
@@ -260,6 +268,29 @@ export function queueTelegramBooking(db: DatabaseSync, bookingId: string, catego
     SELECT ?, ?, route_version, 'pending', ? FROM telegram_settings WHERE id = 1 AND enabled = 1
     ON CONFLICT(booking_id) DO NOTHING
   `).run(bookingId, category, Date.now());
+}
+
+export function getTelegramBookingDelivery(bookingId: string) {
+  return ensureTelegram().prepare(`
+    SELECT s.enabled, o.status, o.error_code, o.lease_until
+    FROM telegram_settings AS s
+    LEFT JOIN telegram_outbox AS o ON o.booking_id = ?
+    WHERE s.id = 1
+  `).get(bookingId) as BookingDelivery;
+}
+
+export function retryTelegramBooking(bookingId: string) {
+  const now = Date.now();
+  const result = ensureTelegram().prepare(`
+    UPDATE telegram_outbox AS o
+    SET status = 'pending', route_version = s.route_version, next_at = ?,
+      attempt = 0, lease = NULL, lease_until = NULL, error_code = NULL
+    FROM telegram_settings AS s
+    WHERE s.id = 1 AND s.enabled = 1 AND o.booking_id = ?
+      AND o.status IN ('failed', 'canceled')
+      AND (o.lease_until IS NULL OR o.lease_until <= ?)
+  `).run(now, bookingId, now);
+  return result.changes === 1;
 }
 
 export function claimTelegramJob(): TelegramJob | null {
@@ -314,7 +345,9 @@ export function finishTelegramJob(job: Pick<TelegramJob, "id" | "lease">, outcom
   const errorCode = outcome.status === "sent" ? null
     : /^[a-z0-9_-]{1,60}$/i.test(outcome.error) ? outcome.error : "delivery_error";
   ensureTelegram().prepare(`
-    UPDATE telegram_outbox SET status = ?, next_at = ?, error_code = ?, lease = NULL, lease_until = NULL
-    WHERE booking_id = ? AND lease = ? AND status = 'pending'
-  `).run(status, nextAt, errorCode, job.id, job.lease);
+    UPDATE telegram_outbox
+    SET status = CASE WHEN status = 'canceled' AND ? <> 'sent' THEN 'canceled' ELSE ? END,
+      next_at = ?, error_code = ?, lease = NULL, lease_until = NULL
+    WHERE booking_id = ? AND lease = ? AND status IN ('pending', 'canceled')
+  `).run(status, status, nextAt, errorCode, job.id, job.lease);
 }
