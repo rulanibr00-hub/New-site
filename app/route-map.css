@@ -1,0 +1,224 @@
+.tour-route-map {
+  margin-block: 18px 24px;
+  min-width: 0;
+}
+
+.tour-route-map__heading {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.tour-route-map .tour-route-map__heading h2 {
+  color: var(--forest);
+  margin: 0;
+}
+
+.tour-route-map__heading > span {
+  color: var(--muted);
+  font-size: .9rem;
+}
+
+.route-leaflet {
+  background-color: #edf2eb;
+  background-image:
+    linear-gradient(to right, #d8e4d7 1px, transparent 1px),
+    linear-gradient(to bottom, #d8e4d7 1px, transparent 1px);
+  background-size: 28px 28px;
+  border: 1px solid #cad8c9;
+  border-radius: 16px;
+  height: var(--route-map-height, clamp(280px, 38vw, 390px));
+  isolation: isolate;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.route-leaflet .route-leaflet__canvas {
+  background: transparent;
+  font-family: inherit;
+  height: 100%;
+  width: 100%;
+}
+
+.route-leaflet__canvas:focus-visible {
+  outline-offset: -4px;
+}
+
+.route-leaflet[data-picking="true"] .route-leaflet__canvas {
+  cursor: crosshair;
+}
+
+.route-leaflet .leaflet-control-zoom {
+  border: 1px solid #b7c8ba;
+  border-radius: 9px;
+  box-shadow: 0 2px 7px rgb(10 50 38 / 13%);
+  overflow: hidden;
+}
+
+.route-leaflet .leaflet-control-zoom a {
+  color: var(--forest);
+  height: 36px;
+  line-height: 36px;
+  width: 36px;
+}
+
+.route-leaflet .leaflet-control-zoom a:focus-visible {
+  outline-offset: -3px;
+}
+
+.route-leaflet .leaflet-control-zoom a.leaflet-disabled {
+  color: #818d83;
+}
+
+.route-leaflet .leaflet-control-attribution {
+  background: rgb(255 254 250 / 92%);
+  color: #495a51;
+}
+
+.route-leaflet .leaflet-control-attribution a,
+.route-leaflet .leaflet-popup-content a {
+  color: var(--forest);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.route-leaflet__pin {
+  align-items: center;
+  background: var(--forest);
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 2px 5px rgb(7 46 34 / 30%);
+  color: white;
+  display: flex;
+  font-size: 1rem;
+  font-weight: 760;
+  justify-content: center;
+}
+
+.route-leaflet__pin.is-selected {
+  background: #075237;
+  box-shadow: 0 0 0 3px rgb(7 61 45 / 24%), 0 2px 6px rgb(7 46 34 / 30%);
+}
+
+.route-leaflet .leaflet-popup-content-wrapper {
+  border: 1px solid #d0d9cf;
+  border-radius: 11px;
+  box-shadow: 0 4px 14px rgb(14 59 41 / 19%);
+}
+
+.route-leaflet .leaflet-popup-content {
+  color: var(--ink);
+  font-size: .85rem;
+  margin: 13px 24px 13px 14px;
+}
+
+.route-leaflet__popup {
+  display: grid;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+
+.route-leaflet .route-leaflet__popup p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.route-leaflet .leaflet-popup-content a {
+  font-weight: 700;
+}
+
+.route-leaflet__status {
+  background: rgb(255 254 250 / 94%);
+  border: 1px solid #d0d9cf;
+  border-radius: 7px;
+  box-shadow: 0 2px 6px rgb(10 50 38 / 8%);
+  bottom: 10px;
+  color: #3e5549;
+  font-size: .8rem;
+  left: 10px;
+  margin: 0;
+  max-width: calc(100% - 20px);
+  padding: 5px 8px;
+  pointer-events: none;
+  position: absolute;
+  z-index: 500;
+}
+
+.tour-route-map__stops {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 185px), 1fr));
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.tour-route-map__stop {
+  align-items: start;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 4px;
+}
+
+.tour-route-map__select {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: var(--forest);
+  display: flex;
+  gap: 8px;
+  min-height: 40px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 6px;
+  text-align: left;
+}
+
+.tour-route-map__select:hover,
+.tour-route-map__select[aria-pressed="true"] {
+  background: #e9f2e9;
+}
+
+.tour-route-map__number {
+  align-items: center;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  display: inline-flex;
+  flex: 0 0 25px;
+  font-size: .84rem;
+  font-weight: 760;
+  height: 25px;
+  justify-content: center;
+}
+
+.tour-route-map__directions {
+  align-items: center;
+  border-radius: 7px;
+  color: var(--forest);
+  display: grid;
+  height: 40px;
+  justify-items: center;
+  width: 40px;
+}
+
+.tour-route-map__directions:hover {
+  background: #e9f2e9;
+}
+
+.tour-route-map__note {
+  color: var(--muted);
+  font-size: .84rem;
+  grid-column: 1 / -1;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  padding: 0 6px 6px;
+}

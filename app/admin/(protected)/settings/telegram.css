@@ -1,0 +1,10 @@
+.telegram-settings { margin-top: 18px; }
+.telegram-settings > summary { cursor: pointer; font-weight: 750; color: var(--forest); }
+.telegram-settings[open] > summary { margin-bottom: 14px; }
+.telegram-settings > form { margin-top: 14px; }
+.telegram-settings__fields { margin: 0 0 15px; padding: 0; min-inline-size: 0; border: 0; }
+.telegram-settings__test { display: grid; justify-items: start; gap: 8px; }
+.telegram-settings__test .admin-muted { font-size: .9rem; }
+.telegram-settings__test :is(.admin-error, .admin-success) { margin-bottom: 0; }
+.telegram-settings .telegram-settings__counts { display: flex; flex-wrap: wrap; gap: 10px 23px; margin-top: 15px; }
+.telegram-settings__counts dd { margin-bottom: 0; }
