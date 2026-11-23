@@ -21,7 +21,7 @@ export default async function BookingPage({ params, searchParams }: BookingPageP
   const requestedPeople = typeof query.people === "string" && /^\d{1,3}$/.test(query.people) ? Number(query.people) : 0;
   const validPeople = requestedPeople > 0 && requestedPeople <= tour.groupLimit;
   const initialPeople = validPeople ? requestedPeople : Math.min(2, tour.groupLimit);
-  const initialDate = typeof query.date === "string" && canDepart(tour, query.date) ? query.date : "";
+  const initialDate = typeof query.date === "string" && canDepart(tour, query.date, today) ? query.date : "";
   const tourQuery = new URLSearchParams();
   if (typeof query.region === "string" && query.region === tour.region) tourQuery.set("region", query.region);
   if (initialDate) tourQuery.set("date", initialDate);

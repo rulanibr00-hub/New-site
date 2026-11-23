@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Clock, MapPin, Minus, Plus, Users } from "lucide-react";
-import { canDepart, formatMoney, priceTour, type Tour } from "../lib/tours";
+import { canDepart, formatMoney, getUpcomingDepartures, priceTour, type Tour } from "../lib/tours";
 
 type BookingFormProps = {
   tour: Tour;
@@ -21,6 +21,7 @@ type BookingError = { message: string; field?: BookingField; refreshPrice?: bool
 
 const weekdayNames = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
 const dateFormat = new Intl.DateTimeFormat("ru-RU", { dateStyle: "long", timeZone: "UTC" });
+const shortDateFormat = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", timeZone: "UTC" });
 const dayPlural = new Intl.PluralRules("ru-RU");
 const weekdaysInOrder = [1, 2, 3, 4, 5, 6, 0];
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -30,16 +31,6 @@ const controlCharacters = /\p{Cc}/u;
 function durationLabel(days: number) {
   const form = dayPlural.select(days);
   return `${days} ${form === "one" ? "день" : form === "few" ? "дня" : "дней"}`;
-}
-
-function hasAvailableDate(tour: Tour, start: string) {
-  const current = new Date(start);
-  // A weekly schedule repeats after seven days.
-  for (let offset = 0; offset < 7; offset += 1) {
-    if (canDepart(tour, current.toISOString().slice(0, 10))) return true;
-    current.setUTCDate(current.getUTCDate() + 1);
-  }
-  return false;
 }
 
 export function BookingForm({ tour, demo, today, initialPeople, initialDate, tourHref }: BookingFormProps) {
@@ -62,10 +53,10 @@ export function BookingForm({ tour, demo, today, initialPeople, initialDate, tou
 
   const option = tour.options.find((item) => item.id === optionId);
   const quote = option ? priceTour(tour, option.id, people, withGuide) : null;
-  const hasValidDate = date !== "" && canDepart(tour, date);
+  const hasValidDate = date !== "" && canDepart(tour, date, today);
   const hasInvalidDate = date !== "" && !hasValidDate;
-  const earliestDate = tour.startDate && tour.startDate > today ? tour.startDate : today;
-  const hasDates = hasAvailableDate(tour, earliestDate);
+  const departures = getUpcomingDepartures(tour, today);
+  const hasDates = departures.length > 0;
   const availableDays = weekdaysInOrder.filter((day) => tour.weekdays.includes(day)).map((day) => weekdayNames[day]);
   const daysLabel = availableDays.length === 7 ? "Выезды каждый день" : `Выезды в ${availableDays.join(", ")}`;
   const period = [
@@ -104,6 +95,11 @@ export function BookingForm({ tour, demo, today, initialPeople, initialDate, tou
 
   function clearFieldError(field: BookingField) {
     if (error?.field === field) setError(null);
+  }
+
+  function selectDate(value: string) {
+    setDate(value);
+    clearFieldError("date");
   }
 
   function refreshPrice() {
@@ -224,15 +220,33 @@ export function BookingForm({ tour, demo, today, initialPeople, initialDate, tou
           <fieldset className="booking-card booking-section" aria-labelledby="booking-parameters" disabled={busy}>
             <h2 id="booking-parameters" tabIndex={-1} className="booking-section-heading">Параметры поездки</h2>
             {(parameterError || changedParameters) && <p className="booking-error" role="alert">{parameterError ?? changedParameters}</p>}
+            {hasDates && (
+              <fieldset className="booking-departures">
+                <legend>Ближайшие выезды</legend>
+                <div className="booking-departure-grid">
+                  {departures.map((departure) => {
+                    const calendarDate = new Date(departure);
+                    return (
+                      <label className="booking-departure-option" key={departure}>
+                        <input type="radio" name="departure-date-choice" value={departure}
+                          aria-label={dateFormat.format(calendarDate)} checked={date === departure}
+                          onChange={() => selectDate(departure)} />
+                        <span>
+                          <time dateTime={departure}>{shortDateFormat.format(calendarDate)}</time>
+                          <small>{weekdayNames[calendarDate.getUTCDay()]}</small>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            )}
             <div className="booking-field-grid">
               <div className="booking-field">
                 <label htmlFor="booking-date">Дата выезда</label>
-                <input id="booking-date" name="date" type="date" min={earliestDate} max={tour.endDate} value={date} required disabled={!hasDates}
+                <input id="booking-date" name="date" type="date" min={departures[0]} max={tour.endDate} value={date} required disabled={!hasDates}
                   aria-invalid={Boolean(dateError) || hasInvalidDate || undefined} aria-describedby="booking-date-note"
-                  onChange={(event) => {
-                    setDate(event.target.value);
-                    clearFieldError("date");
-                  }} />
+                  onChange={(event) => selectDate(event.target.value)} />
                 <small id="booking-date-note" className={dateError || hasInvalidDate ? "booking-field-error" : undefined} aria-live="polite">
                   {!hasDates ? "Сейчас нет доступных дат выезда." : dateError ?? (hasInvalidDate ? `Выберите другую дату. ${dateNote}.` : dateNote)}
                 </small>

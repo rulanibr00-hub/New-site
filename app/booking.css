@@ -102,6 +102,7 @@
 
 .booking-field small,
 .booking-guide-option small,
+.booking-departure-option small,
 .booking-help {
   color: var(--muted);
   font-size: 0.85rem;
@@ -181,13 +182,22 @@
   text-align: center;
 }
 
+.booking-departures,
 .booking-guide {
   min-inline-size: 0;
-  margin: 20px 0 0;
   padding: 0;
   border: 0;
 }
 
+.booking-departures {
+  margin: 0 0 18px;
+}
+
+.booking-guide {
+  margin: 20px 0 0;
+}
+
+.booking-departures legend,
 .booking-guide legend {
   margin-bottom: 10px;
   padding: 0;
@@ -196,12 +206,19 @@
   font-weight: 650;
 }
 
+.booking-departure-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .booking-guide-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
+.booking-departure-option,
 .booking-guide-option {
   display: flex;
   align-items: flex-start;
@@ -216,11 +233,20 @@
   cursor: pointer;
 }
 
+.booking-departure-option {
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 0.88rem;
+}
+
+.booking-departure-option:has(:checked),
 .booking-guide-option:has(:checked) {
   border-color: #6e9a7e;
   background: #eff5ed;
 }
 
+.booking-departure-option input,
 .booking-guide-option input {
   flex: 0 0 auto;
   width: 17px;
@@ -229,6 +255,13 @@
   accent-color: var(--forest);
 }
 
+.booking-departure-option input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+}
+
+.booking-departure-option small,
 .booking-guide-option small {
   display: block;
   margin-top: 2px;
@@ -471,6 +504,10 @@
   .booking-field-grid,
   .booking-guide-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .booking-departure-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .booking-field input[type="date"] {

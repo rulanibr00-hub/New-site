@@ -163,8 +163,8 @@ export function getToday() {
   return bishkekDate.format(new Date());
 }
 
-export function canDepart(tour: Tour, date: string) {
-  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) || date < getToday()) {
+export function canDepart(tour: Tour, date: string, today = getToday()) {
+  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today) {
     return false;
   }
   if ((tour.startDate && date < tour.startDate) || (tour.endDate && date > tour.endDate)) return false;
@@ -173,6 +173,23 @@ export function canDepart(tour: Tour, date: string) {
   return Number.isFinite(calendarDate.getTime())
     && calendarDate.toISOString().slice(0, 10) === date
     && tour.weekdays.includes(calendarDate.getUTCDay());
+}
+
+export function getUpcomingDepartures(tour: Tour, today: string) {
+  const limit = 4;
+  const start = tour.startDate && tour.startDate > today ? tour.startDate : today;
+  const current = new Date(`${start}T00:00:00Z`);
+  const dates: string[] = [];
+  if (!Number.isFinite(current.getTime())) return dates;
+
+  // A weekly schedule needs at most one week per departure.
+  for (let offset = 0; offset < 7 * limit && dates.length < limit; offset += 1) {
+    const date = current.toISOString().slice(0, 10);
+    if (tour.endDate && date > tour.endDate) break;
+    if (canDepart(tour, date, today)) dates.push(date);
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+  return dates;
 }
 
 export function priceTour(tour: Tour, optionId: string, people: number, withGuide: boolean) {
