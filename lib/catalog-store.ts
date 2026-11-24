@@ -6,8 +6,8 @@ import { type DatabaseSync } from "node:sqlite";
 import { openBookings } from "./storage.mjs";
 import { isStoredTourMediaPath, storedTourMediaExists } from "./tour-media";
 import {
-  getToday, parseRouteCoordinate, tourRouteLatitudeLimit, tourRoutePointLimit, tours,
-  type Tour, type TourOption, type TourRoutePoint,
+  getToday, normalizeTourRouteTrack, parseRouteCoordinate, tourRouteLatitudeLimit, tourRoutePointLimit,
+  tourRouteTrackPayloadLimit, tours, type Tour, type TourOption, type TourRoutePoint, type TourRouteTrack,
 } from "./tours";
 
 export type ManagedTour = {
@@ -257,6 +257,25 @@ function readRoutePoints(value: unknown, publish: boolean, previous?: TourRouteP
   });
 }
 
+function readRouteTrack(value: unknown, previous?: TourRouteTrack): TourRouteTrack | undefined {
+  if (value == null || value === "") return previous;
+
+  let source: unknown = value;
+  if (typeof value === "string") {
+    if (value.length > tourRouteTrackPayloadLimit) throw new CatalogError("GPS-трек слишком большой. Упростите его и загрузите заново.");
+    try {
+      source = JSON.parse(value);
+    } catch {
+      throw new CatalogError("Не удалось прочитать GPS-трек. Загрузите GPX заново.");
+    }
+  }
+  if (source === null) return undefined;
+
+  const track = normalizeTourRouteTrack(source);
+  if (!track) throw new CatalogError("Проверьте координаты GPS-трека и загрузите GPX заново.");
+  return track;
+}
+
 function readTour(input: Record<string, unknown>, slug: string, publish: boolean, previous?: Tour): Tour {
   const required = { required: publish };
   const startDate = readDate(input.startDate, "Начало выездов");
@@ -301,6 +320,7 @@ function readTour(input: Record<string, unknown>, slug: string, publish: boolean
     includes: [...new Set(items(input.includes, "Что включено", 24).map((item) => text(item, "Что включено", 200)).filter(Boolean))],
     program: readProgram(input.program, publish),
     routePoints: readRoutePoints(input.routePoints, publish, previous?.routePoints),
+    routeTrack: readRouteTrack(input.routeTrack, previous?.routeTrack),
     startDate,
     endDate,
   };
@@ -333,20 +353,23 @@ export function getManagedTour(slug: string): ManagedTour | null {
   return row ? managedTour(row) : null;
 }
 
-const selectPublicTours = `
-  SELECT tour.published, json_extract(settings.content, '$.demo') AS demo
-  FROM catalog_tours AS tour
-  CROSS JOIN site_settings AS settings
-  WHERE tour.published IS NOT NULL
-`;
+function selectPublicTours(includeRouteTrack: boolean) {
+  const published = includeRouteTrack ? "tour.published" : "json_remove(tour.published, '$.routeTrack')";
+  return `
+    SELECT ${published} AS published, json_extract(settings.content, '$.demo') AS demo
+    FROM catalog_tours AS tour
+    CROSS JOIN site_settings AS settings
+    WHERE tour.published IS NOT NULL
+  `;
+}
 
 export function listPublishedTours(): Tour[] {
-  const rows = ensureCatalog().prepare(selectPublicTours + " ORDER BY tour.position").all() as PublishedRow[];
+  const rows = ensureCatalog().prepare(selectPublicTours(false) + " ORDER BY tour.position").all() as PublishedRow[];
   return rows.map(publicTour);
 }
 
-export function getPublishedTour(slug: string): Tour | null {
-  const row = ensureCatalog().prepare(selectPublicTours + " AND tour.slug = ?").get(slug) as PublishedRow | undefined;
+export function getPublishedTour(slug: string, { includeRouteTrack = true }: { includeRouteTrack?: boolean } = {}): Tour | null {
+  const row = ensureCatalog().prepare(selectPublicTours(includeRouteTrack) + " AND tour.slug = ?").get(slug) as PublishedRow | undefined;
   return row ? publicTour(row) : null;
 }
 

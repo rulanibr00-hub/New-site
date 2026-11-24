@@ -13,7 +13,7 @@ export const metadata = { title: "Оформление тура" };
 
 export default async function BookingPage({ params, searchParams }: BookingPageProps) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
-  const tour = getPublishedTour(slug);
+  const tour = getPublishedTour(slug, { includeRouteTrack: false });
 
   if (!tour) notFound();
 

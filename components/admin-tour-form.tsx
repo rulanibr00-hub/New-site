@@ -87,6 +87,8 @@ export function AdminTourForm({ record, action }: Props) {
   const [includes, setIncludes] = useState(initial?.includes.join("\n") ?? "");
   const [photos, setPhotos] = useState({ image: initial?.image ?? "", gallery: initial?.gallery ?? [] });
   const [uploading, setUploading] = useState(false);
+  const [importingTrack, setImportingTrack] = useState(false);
+  const submittingDisabled = pending || uploading || importingTrack;
   const feedback = useRef<HTMLParagraphElement>(null);
   const published = status.publishedRevision !== null;
 
@@ -248,7 +250,8 @@ export function AdminTourForm({ record, action }: Props) {
           />
         </section>
 
-        <AdminRouteEditor initialPoints={initial?.routePoints} disabled={pending} />
+        <AdminRouteEditor initialPoints={initial?.routePoints} initialTrack={initial?.routeTrack}
+          disabled={pending} onTrackBusyChange={setImportingTrack} />
 
         <section className="admin-panel admin-tour-section" aria-labelledby={`${formId}-program`}>
           <div className="admin-tour-section-title">
@@ -293,9 +296,9 @@ export function AdminTourForm({ record, action }: Props) {
         {status.error && <p ref={feedback} tabIndex={-1} className="admin-error" role="alert">{status.error}</p>}
         {status.notice && <p className="admin-tour-notice" role="status">{status.notice}</p>}
         <div className="admin-actions">
-          <button className="admin-secondary" name="intent" value="draft" disabled={pending || uploading}>Сохранить черновик</button>
-          <button className="admin-button" name="intent" value="publish" disabled={pending || uploading}>Опубликовать</button>
-          {published && <button className="admin-secondary" name="intent" value="unpublish" formNoValidate disabled={pending || uploading}>Снять с публикации</button>}
+          <button className="admin-secondary" name="intent" value="draft" disabled={submittingDisabled}>Сохранить черновик</button>
+          <button className="admin-button" name="intent" value="publish" disabled={submittingDisabled}>Опубликовать</button>
+          {published && <button className="admin-secondary" name="intent" value="unpublish" formNoValidate disabled={submittingDisabled}>Снять с публикации</button>}
         </div>
         {pending && <p role="status">Сохраняем…</p>}
       </div>

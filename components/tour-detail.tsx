@@ -187,7 +187,7 @@ function TourSections({ tour, route }: { tour: Tour; route: PublicTourRoute }) {
         {tabs[active].id === 'route' && (
           <>
             <p className="tour-description" style={{ whiteSpace: 'pre-line' }}>{tour.description}</p>
-            {route.points.length > 0 && <TourRouteMap {...route} />}
+            {(route.points.length > 0 || Boolean(route.track?.length)) && <TourRouteMap {...route} />}
             <h2>{tour.options.every(({ days }) => days === 1) ? 'Программа дня' : 'Программа поездки'}</h2>
             <ol className="tour-program">
               {tour.program.map(({ time, title, description }, index) => (

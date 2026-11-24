@@ -17,12 +17,38 @@
   min-width: 0;
 }
 
+.admin-route-toolbar {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-route-mode[aria-pressed="true"] {
+  border-color: var(--forest);
+  background: #e1f0e7;
+}
+
 .admin-route-actions,
 .admin-route-point-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 14px;
+}
+
+.admin-route-preview {
+  border-top: 1px solid #d7e0d8;
+  padding-top: 12px;
+}
+
+.admin-route-preview > summary {
+  min-height: 34px;
+  cursor: pointer;
+  color: var(--forest);
+  font-weight: 700;
+}
+
+.admin-route-preview > .tour-route-map {
+  margin-top: 8px;
 }
 
 .admin-route-point-actions { margin-top: 12px; }

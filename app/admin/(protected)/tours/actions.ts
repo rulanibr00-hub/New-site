@@ -30,6 +30,7 @@ function readTourFields(data: FormData, existingSlug: string | null) {
     image: data.get("image"),
     gallery: data.getAll("gallery"),
     routePoints: data.get("routePoints"),
+    routeTrack: data.get("routeTrack"),
     includes: typeof includes === "string" ? includes.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : [],
     options: data.getAll("optionIds").map((id, index) => ({
       id, days: optionDays[index], pricePerPerson: optionPrices[index], guidePerGroup: optionGuides[index],

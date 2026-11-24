@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { LayerGroup, LeafletMouseEvent, Map as LeafletMap, Marker } from "leaflet";
-import type { LocatedTourRoutePoint } from "@/lib/tours";
+import type { LocatedTourRoutePoint, TourRouteTrack } from "@/lib/tours";
 import "leaflet/dist/leaflet.css";
 import "../app/route-map.css";
 
@@ -10,16 +10,20 @@ type RouteMapPoint = LocatedTourRoutePoint & { index: number };
 
 type RouteLeafletProps = {
   points: readonly RouteMapPoint[];
+  track?: TourRouteTrack;
   selectedIndex?: number;
+  meetingIndex?: number;
   onSelect?: (index: number) => void;
-  onPopupClose?: (index: number) => void;
   onPick?: (lat: number, lng: number) => void;
-  showPopups?: boolean;
+  showReset?: boolean;
+  allowPageScroll?: boolean;
 };
 
 type MapRuntime = {
   leaflet: typeof import("leaflet");
-  layers: LayerGroup;
+  map: LeafletMap;
+  lines: LayerGroup;
+  pins: LayerGroup;
   markers: Map<number, Marker>;
 };
 
@@ -27,47 +31,48 @@ const tilesUrl = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const tilesCredit = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 const bishkek = { lat: 42.8746, lng: 74.5698 };
 const routePane = "tour-route";
+const routePadding = { paddingTopLeft: [44, 68] as [number, number], paddingBottomRight: [44, 48] as [number, number] };
 
 export function navigationLink({ lat, lng }: Pick<LocatedTourRoutePoint, "lat" | "lng">) {
   const params = new URLSearchParams({ api: "1", destination: `${lat},${lng}` });
   return `https://www.google.com/maps/dir/?${params}`;
 }
 
-function popupContent(point: RouteMapPoint) {
-  const content = document.createElement("div");
-  content.className = "route-leaflet__popup";
-
-  const heading = document.createElement("strong");
-  heading.textContent = point.title;
-  content.append(heading);
-
-  if (point.note) {
-    const note = document.createElement("p");
-    note.textContent = point.note;
-    content.append(note);
+function fitRoute(
+  map: LeafletMap,
+  leaflet: MapRuntime["leaflet"],
+  { points, track }: Pick<RouteLeafletProps, "points" | "track">,
+) {
+  const bounds = leaflet.latLngBounds(points.map(({ lat, lng }) => leaflet.latLng(lat, lng)));
+  for (const segment of track ?? []) {
+    for (const position of segment) bounds.extend(position);
   }
-
-  const link = document.createElement("a");
-  link.href = navigationLink(point);
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  link.textContent = "Открыть в навигаторе";
-  content.append(link);
-
-  return content;
+  if (!bounds.isValid()) {
+    map.setView(bishkek, 10, { animate: false });
+  } else if (bounds.getNorthWest().equals(bounds.getSouthEast())) {
+    map.setView(bounds.getCenter(), 14, { animate: false });
+  } else {
+    map.fitBounds(bounds, { ...routePadding, maxZoom: 15, animate: false });
+  }
 }
 
-export function RouteLeaflet({ points, selectedIndex, onSelect, onPopupClose, onPick, showPopups = true }: RouteLeafletProps) {
+export function RouteLeaflet({
+  points, track, selectedIndex, meetingIndex, onSelect, onPick, showReset = false, allowPageScroll = false,
+}: RouteLeafletProps) {
   const canvas = useRef<HTMLDivElement>(null);
-  const latestPoints = useRef(points);
-  const handlers = useRef({ onSelect, onPopupClose, onPick });
+  const geometry = useRef({ points, track });
+  const handlers = useRef({ onSelect, onPick });
+  const lastFitTrack = useRef(track);
   const [runtime, setRuntime] = useState<MapRuntime | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "tiles-failed" | "unavailable">("loading");
+  const coordinates = useMemo<TourRouteTrack | undefined>(() => (
+    track ?? (points.length > 1 ? [points.map(({ lat, lng }) => [lat, lng])] : undefined)
+  ), [points, track]);
 
   useEffect(() => {
-    latestPoints.current = points;
-    handlers.current = { onSelect, onPopupClose, onPick };
-  }, [points, onSelect, onPopupClose, onPick]);
+    geometry.current = { points, track };
+    handlers.current = { onSelect, onPick };
+  }, [points, track, onSelect, onPick]);
 
   useEffect(() => {
     const element = canvas.current;
@@ -82,17 +87,17 @@ export function RouteLeaflet({ points, selectedIndex, onSelect, onPopupClose, on
     void import("leaflet").then((leaflet) => {
       if (cancelled) return;
 
-      const instance = leaflet.map(element, { zoomControl: false, scrollWheelZoom: false, maxZoom: 19 });
+      const touchScrolling = allowPageScroll && window.matchMedia("(pointer: coarse)").matches;
+      const instance = leaflet.map(element, {
+        zoomControl: false,
+        zoomAnimation: false,
+        scrollWheelZoom: false,
+        dragging: !touchScrolling,
+        maxZoom: 19,
+      });
       map = instance;
-      const initialPoints = latestPoints.current;
-      if (initialPoints.length === 1) {
-        instance.setView(initialPoints[0], 14);
-      } else if (initialPoints.length > 1) {
-        const bounds = leaflet.latLngBounds(initialPoints.map(({ lat, lng }) => leaflet.latLng(lat, lng)));
-        instance.fitBounds(bounds, { padding: [46, 49], maxZoom: 15 });
-      } else {
-        instance.setView(bishkek, 10);
-      }
+      fitRoute(instance, leaflet, geometry.current);
+      lastFitTrack.current = geometry.current.track;
       instance.createPane(routePane).style.zIndex = "410";
       instance.attributionControl.setPrefix(false);
       leaflet.control.zoom({
@@ -126,7 +131,10 @@ export function RouteLeaflet({ points, selectedIndex, onSelect, onPopupClose, on
 
       observer = new ResizeObserver(() => instance.invalidateSize({ pan: false }));
       observer.observe(element);
-      setRuntime({ leaflet, layers: leaflet.layerGroup().addTo(instance), markers: new Map() });
+      setRuntime({
+        leaflet, map: instance, markers: new Map(),
+        lines: leaflet.layerGroup().addTo(instance), pins: leaflet.layerGroup().addTo(instance),
+      });
     }).catch(() => {
       clearTimeout(tileTimeout);
       observer?.disconnect();
@@ -141,32 +149,42 @@ export function RouteLeaflet({ points, selectedIndex, onSelect, onPopupClose, on
       observer?.disconnect();
       map?.remove();
     };
-  }, []);
+  }, [allowPageScroll]);
+
+  useEffect(() => {
+    if (!runtime || track === lastFitTrack.current) return;
+    lastFitTrack.current = track;
+    fitRoute(runtime.map, runtime.leaflet, geometry.current);
+  }, [runtime, track]);
 
   useEffect(() => {
     if (!runtime) return;
-    const { leaflet, layers, markers } = runtime;
-    layers.clearLayers();
-    markers.clear();
+    const { leaflet, lines } = runtime;
+    lines.clearLayers();
+    if (!coordinates) return;
 
-    if (points.length > 1) {
-      const coordinates = points.map(({ lat, lng }) => leaflet.latLng(lat, lng));
-      leaflet.polyline(coordinates, {
-        className: "route-leaflet__line-outline",
-        color: "#fffefa",
-        weight: 7,
-        interactive: false,
-        pane: routePane,
-      }).addTo(layers);
-      leaflet.polyline(coordinates, {
-        className: "route-leaflet__line",
-        color: "#0b4e37",
-        weight: 3,
-        dashArray: "7 7",
-        interactive: false,
-        pane: routePane,
-      }).addTo(layers);
-    }
+    leaflet.polyline(coordinates, {
+      className: "route-leaflet__line-outline",
+      color: "#fffefa",
+      weight: 7,
+      interactive: false,
+      pane: routePane,
+    }).addTo(lines);
+    leaflet.polyline(coordinates, {
+      className: `route-leaflet__line route-leaflet__line--${track ? "track" : "schematic"}`,
+      color: "#0b4e37",
+      weight: 3,
+      dashArray: track ? undefined : "7 7",
+      interactive: false,
+      pane: routePane,
+    }).addTo(lines);
+  }, [coordinates, runtime, track]);
+
+  useEffect(() => {
+    if (!runtime) return;
+    const { leaflet, pins, markers } = runtime;
+    pins.clearLayers();
+    markers.clear();
 
     for (const point of points) {
       const number = document.createElement("span");
@@ -177,42 +195,47 @@ export function RouteLeaflet({ points, selectedIndex, onSelect, onPopupClose, on
         title: point.title,
         bubblingMouseEvents: false,
         icon: leaflet.divIcon({
-          className: "route-leaflet__pin",
+          className: point.index === meetingIndex ? "route-leaflet__pin is-meeting" : "route-leaflet__pin",
           html: number,
           iconSize: [34, 34],
           iconAnchor: [17, 17],
-          popupAnchor: [0, -15],
         }),
-      }).addTo(layers);
+      }).addTo(pins);
 
-      marker.getElement()?.setAttribute("aria-label", `${point.index + 1}. ${point.title}`);
+      const element = marker.getElement();
+      const label = point.index === meetingIndex ? `Место встречи. ${point.title}` : point.title;
+      element?.setAttribute("aria-label", `${point.index + 1}. ${label}`);
+      element?.addEventListener("keydown", (event) => {
+        if (event.key !== " ") return;
+        event.preventDefault();
+        event.stopPropagation();
+        handlers.current.onSelect?.(point.index);
+      });
       marker.on("click", () => handlers.current.onSelect?.(point.index));
-      if (showPopups) {
-        marker.bindPopup(popupContent(point), {
-          maxWidth: 244,
-          minWidth: 144,
-          autoPanPadding: [18, 18],
-          keepInView: true,
-        });
-        marker.on("popupclose", () => handlers.current.onPopupClose?.(point.index));
-      }
       markers.set(point.index, marker);
     }
-  }, [points, runtime, showPopups]);
+  }, [meetingIndex, points, runtime]);
 
   useEffect(() => {
     if (!runtime) return;
     for (const [index, marker] of runtime.markers) {
       const selected = index === selectedIndex;
-      marker.getElement()?.classList.toggle("is-selected", selected);
+      const element = marker.getElement();
+      element?.classList.toggle("is-selected", selected);
+      element?.setAttribute("aria-pressed", String(selected));
       marker.setZIndexOffset(selected ? 100 : 0);
-      if (selected && marker.getPopup() && !marker.isPopupOpen()) marker.openPopup();
+      if (selected) runtime.map.panInside(marker.getLatLng(), { ...routePadding, animate: false });
     }
-  }, [points, runtime, selectedIndex]);
+  }, [meetingIndex, points, runtime, selectedIndex, track]);
 
   return (
     <div className="route-leaflet" data-map-status={status} data-picking={onPick ? "true" : undefined}>
       <div className="route-leaflet__canvas" ref={canvas} role="region" aria-label="Интерактивная карта маршрута" />
+      {runtime && showReset && (points.length > 0 || track) && (
+        <button type="button" className="route-leaflet__reset" onClick={() => fitRoute(runtime.map, runtime.leaflet, geometry.current)}>
+          Весь маршрут
+        </button>
+      )}
       {status !== "ready" && (
         <p className="route-leaflet__status" role="status">
           {status === "loading" ? "Загружаем карту…" : status === "tiles-failed" ? "Подложка карты недоступна." : "Карта недоступна."}

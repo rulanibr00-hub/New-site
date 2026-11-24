@@ -1,9 +1,11 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, MapPin, Plus, Trash2 } from "lucide-react";
 import { useId, useMemo, useRef, useState } from "react";
+import { AdminRouteTrackField } from "@/components/admin-route-track-field";
 import { RouteLeaflet } from "@/components/route-leaflet";
-import { parseRouteCoordinate, tourRouteLatitudeLimit, tourRoutePointLimit, type TourRoutePoint } from "@/lib/tours";
+import { TourRouteMap } from "@/components/tour-route-map";
+import { parseRouteCoordinate, tourRouteLatitudeLimit, tourRoutePointLimit, type TourRoutePoint, type TourRouteTrack } from "@/lib/tours";
 import "../app/admin/admin-route.css";
 
 type EditablePoint = {
@@ -16,16 +18,23 @@ type EditablePoint = {
 
 type Props = {
   initialPoints?: TourRoutePoint[];
+  initialTrack?: TourRouteTrack;
   disabled: boolean;
+  onTrackBusyChange: (busy: boolean) => void;
 };
 
-export function AdminRouteEditor({ initialPoints, disabled }: Props) {
+type MapEdit = "add" | { move: number };
+
+export function AdminRouteEditor({ initialPoints, initialTrack, disabled, onTrackBusyChange }: Props) {
   const formId = useId();
   const addButton = useRef<HTMLButtonElement>(null);
   const nextKey = useRef(initialPoints?.length ?? 0);
   const [mapOpened, setMapOpened] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [edited, setEdited] = useState(false);
+  const [mapEdit, setMapEdit] = useState<MapEdit>();
   const [selectedKey, setSelectedKey] = useState<number>();
+  const [track, setTrack] = useState(initialTrack);
   const [points, setPoints] = useState<EditablePoint[]>(() =>
     (initialPoints ?? []).map(({ title, note, lat, lng }, key) => ({
       key, title, note, lat: lat == null ? "" : String(lat), lng: lng == null ? "" : String(lng),
@@ -38,7 +47,11 @@ export function AdminRouteEditor({ initialPoints, disabled }: Props) {
     return [{ index, title: title.trim() || `Точка ${index + 1}`, note, lat: latitude, lng: longitude }];
   }), [points]);
   const selectedIndex = points.findIndex((point) => point.key === selectedKey);
+  const selected = points[selectedIndex];
   const canAdd = !disabled && points.length < tourRoutePointLimit;
+  const canPick = !disabled && (mapEdit === "add" ? canAdd : mapEdit !== undefined);
+  const mapHint = `${formId}-map-hint`;
+  const selectedLabel = selected?.title.trim() || `Точка ${selectedIndex + 1}`;
   const payload = initialPoints !== undefined || edited
     ? JSON.stringify(points.map(({ title, note, lat, lng }) => ({ title, note, lat, lng })))
     : "";
@@ -49,6 +62,7 @@ export function AdminRouteEditor({ initialPoints, disabled }: Props) {
     const key = nextKey.current++;
     setPoints((current) => current.length >= tourRoutePointLimit ? current : [...current, { key, title: "", note: "", lat, lng }]);
     setSelectedKey(key);
+    setMapEdit(undefined);
     setEdited(true);
     if (focusTitle) {
       requestAnimationFrame(() => document.getElementById(`${formId}-point-${key}`)?.focus());
@@ -60,7 +74,24 @@ export function AdminRouteEditor({ initialPoints, disabled }: Props) {
     setEdited(true);
   }
 
-  function movePoint(index: number, direction: -1 | 1) {
+  function pickCoordinates(lat: number, lng: number) {
+    if (!canPick || !mapEdit) return;
+
+    const rounded = Number(lat.toFixed(6));
+    const latitude = String(Math.max(-tourRouteLatitudeLimit, Math.min(tourRouteLatitudeLimit, rounded)));
+    const longitude = lng.toFixed(6);
+    if (mapEdit === "add") {
+      addPoint(latitude, longitude, true);
+      return;
+    }
+    setPoints((current) => current.map((point) => point.key === mapEdit.move
+      ? { ...point, lat: latitude, lng: longitude }
+      : point));
+    setEdited(true);
+    setMapEdit(undefined);
+  }
+
+  function reorderPoint(index: number, direction: -1 | 1) {
     const destination = index + direction;
     if (disabled || destination < 0 || destination >= points.length) return;
     setPoints((current) => {
@@ -69,6 +100,7 @@ export function AdminRouteEditor({ initialPoints, disabled }: Props) {
       return moved;
     });
     setSelectedKey(points[index].key);
+    setMapEdit(undefined);
     setEdited(true);
   }
 
@@ -77,6 +109,7 @@ export function AdminRouteEditor({ initialPoints, disabled }: Props) {
     const neighbor = points[index + 1] ?? points[index - 1];
     setPoints((current) => current.filter((point) => point.key !== key));
     setSelectedKey(neighbor?.key);
+    setMapEdit(undefined);
     setEdited(true);
     requestAnimationFrame(() => {
       if (neighbor) document.getElementById(`${formId}-point-${neighbor.key}`)?.focus();
@@ -85,25 +118,53 @@ export function AdminRouteEditor({ initialPoints, disabled }: Props) {
   }
 
   return (
-    <details className="admin-panel admin-route-editor" onToggle={(event) => {
-      if (event.currentTarget.open) setMapOpened(true);
-    }}>
+    <details
+      className="admin-panel admin-route-editor"
+      onToggle={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.currentTarget.open) setMapOpened(true);
+        else setMapEdit(undefined);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") setMapEdit(undefined);
+      }}
+    >
       <summary>Карта маршрута</summary>
       <input type="hidden" name="routePoints" value={payload} />
       <div className="admin-route-content">
-        <p className="admin-tour-note">Нажмите на карту, чтобы поставить отметку, или введите координаты вручную. Порядок точек определяет схему маршрута на сайте.</p>
+        <p className="admin-tour-note">Первая точка отмечает место встречи. Расставьте остальные остановки в порядке поездки.</p>
+        <div className="admin-route-toolbar">
+          <div className="admin-route-actions">
+            <button type="button" className="admin-secondary admin-route-mode"
+              aria-pressed={mapEdit === "add"} aria-describedby={mapHint} disabled={!canAdd}
+              onClick={() => setMapEdit((current) => current === "add" ? undefined : "add")}>
+              <Plus size={16} aria-hidden="true" /> Добавить точку на карте
+            </button>
+            <button type="button" className="admin-secondary admin-route-mode"
+              aria-pressed={typeof mapEdit === "object"} aria-describedby={mapHint} disabled={disabled || !selected}
+              onClick={() => selected && setMapEdit((current) => typeof current === "object" ? undefined : { move: selected.key })}>
+              <MapPin size={16} aria-hidden="true" /> Перенести точку на карте
+            </button>
+          </div>
+          <p id={mapHint} className="admin-tour-note" role="status">
+            {mapEdit === "add" ? "Нажмите на карте, чтобы поставить новую точку."
+              : mapEdit ? `Укажите новое место для точки «${selectedLabel}».`
+                : selected ? `Выбрана точка «${selectedLabel}».` : "Выберите отметку на карте или добавьте новую точку."}
+          </p>
+        </div>
         {mapOpened && (
           <div className="admin-route-map">
             <RouteLeaflet
               points={mapPoints}
-              showPopups={false}
+              track={track}
+              showReset
+              meetingIndex={mapPoints[0]?.index}
               selectedIndex={selectedIndex < 0 ? undefined : selectedIndex}
-              onSelect={disabled ? undefined : (index) => setSelectedKey(points[index]?.key)}
-              onPick={canAdd ? (lat, lng) => {
-                const rounded = Number(lat.toFixed(6));
-                const latitude = Math.max(-tourRouteLatitudeLimit, Math.min(tourRouteLatitudeLimit, rounded));
-                addPoint(String(latitude), lng.toFixed(6));
-              } : undefined}
+              onSelect={disabled ? undefined : (index) => {
+                setSelectedKey(points[index]?.key);
+                setMapEdit(undefined);
+              }}
+              onPick={canPick ? pickCoordinates : undefined}
             />
           </div>
         )}
@@ -113,6 +174,13 @@ export function AdminRouteEditor({ initialPoints, disabled }: Props) {
           </button>
           <span className="admin-tour-note" role="status">Точек на карте {mapPoints.length} из {points.length}</span>
         </div>
+        <AdminRouteTrackField track={track} onChange={setTrack} disabled={disabled} onBusyChange={onTrackBusyChange} />
+        <details className="admin-route-preview" onToggle={(event) => setPreviewOpen(event.currentTarget.open)}>
+          <summary>Предпросмотр карты</summary>
+          {previewOpen && (mapPoints.length || track
+            ? <TourRouteMap points={mapPoints} track={track} isExample={false} />
+            : <p className="admin-tour-note">Добавьте точку или загрузите GPX-трек, чтобы увидеть маршрут.</p>)}
+        </details>
         {points.map((point, index) => {
           const number = index + 1;
           const invalidLat = parseRouteCoordinate(point.lat, tourRouteLatitudeLimit) === undefined;
@@ -120,8 +188,12 @@ export function AdminRouteEditor({ initialPoints, disabled }: Props) {
           const coordinateHelp = `${formId}-coordinates-${point.key}`;
 
           return (
-            <fieldset key={point.key} className="admin-tour-repeater admin-route-point" data-selected={selectedKey === point.key} disabled={disabled}>
-              <legend>Точка {number}</legend>
+            <fieldset key={point.key} className="admin-tour-repeater admin-route-point" data-selected={selectedKey === point.key} disabled={disabled}
+              onFocus={() => {
+                setSelectedKey(point.key);
+                setMapEdit(undefined);
+              }}>
+              <legend>Точка {number}{index === 0 ? " · Место встречи" : ""}</legend>
               <div className="admin-grid">
                 <label className="admin-field admin-tour-wide">
                   <span>Название</span>
@@ -151,11 +223,11 @@ export function AdminRouteEditor({ initialPoints, disabled }: Props) {
               </div>
               <div className="admin-route-point-actions">
                 <button type="button" className="admin-secondary" aria-label={`Поднять точку ${number}`}
-                  onClick={() => movePoint(index, -1)} disabled={index === 0}>
+                  onClick={() => reorderPoint(index, -1)} disabled={index === 0}>
                   <ArrowUp size={16} aria-hidden="true" /> Выше
                 </button>
                 <button type="button" className="admin-secondary" aria-label={`Опустить точку ${number}`}
-                  onClick={() => movePoint(index, 1)} disabled={index === points.length - 1}>
+                  onClick={() => reorderPoint(index, 1)} disabled={index === points.length - 1}>
                   <ArrowDown size={16} aria-hidden="true" /> Ниже
                 </button>
                 <button type="button" className="admin-secondary" aria-label={`Удалить точку ${number}`} onClick={() => removePoint(point.key)}>

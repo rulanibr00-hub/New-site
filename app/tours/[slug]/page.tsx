@@ -19,7 +19,7 @@ type PageProps = {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   await connection();
   const { slug } = await params;
-  const tour = getPublishedTour(slug);
+  const tour = getPublishedTour(slug, { includeRouteTrack: false });
 
   return tour ? { title: tour.title, description: tour.summary } : {};
 }
@@ -50,7 +50,7 @@ export default async function TourPage({ params, searchParams }: PageProps) {
   const bookingHref = getUpcomingDepartures(tour, today).length > 0 ? `/tours/${tour.slug}/book${query}` : null;
   return (
     <TourDetail
-      tour={tour}
+      tour={{ ...tour, routeTrack: undefined }}
       demo={demo}
       route={getPublicTourRoute(tour, demo)}
       catalogHref={`/${query}#tours`}

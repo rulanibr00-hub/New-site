@@ -96,7 +96,7 @@ function saveBooking(db: DatabaseSync, booking: NonNullable<ReturnType<typeof re
     if (saved) return savedResponse(saved, hash);
   }
 
-  const tour = getPublishedTour(tourSlug);
+  const tour = getPublishedTour(tourSlug, { includeRouteTrack: false });
   if (!tour) return error("Тур больше не доступен для оформления.", 404);
   if (!canDepart(tour, date)) return error("Выберите доступную дату выезда.", 409, "availability_changed");
   const option = tour.options.find((candidate) => candidate.id === optionId);

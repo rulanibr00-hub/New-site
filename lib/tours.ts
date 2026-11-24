@@ -13,8 +13,11 @@ export type TourRoutePoint = {
 };
 
 export type LocatedTourRoutePoint = TourRoutePoint & { lat: number; lng: number };
+export type TourRouteTrack = [lat: number, lng: number][][];
 
 export const tourRoutePointLimit = 30;
+export const tourRouteTrackPointLimit = 20_000;
+export const tourRouteTrackPayloadLimit = 650_000;
 // The Web Mercator projection used by the map tiles stops short of the poles.
 export const tourRouteLatitudeLimit = 85.05112878;
 
@@ -38,6 +41,7 @@ export type Tour = {
   includes: string[];
   program: { time: string; title: string; description: string }[];
   routePoints?: TourRoutePoint[];
+  routeTrack?: TourRouteTrack;
 };
 
 const alaArchaExampleRoute: LocatedTourRoutePoint[] = [
@@ -65,8 +69,60 @@ export function isLocatedRoutePoint(point: TourRoutePoint): point is LocatedTour
     && typeof point.lng === "number" && Number.isFinite(point.lng) && Math.abs(point.lng) <= 180;
 }
 
-export function getPublicTourRoute(tour: Tour, demo: boolean): { points: LocatedTourRoutePoint[]; isExample: boolean } {
-  if (tour.routePoints) return { points: tour.routePoints.filter(isLocatedRoutePoint), isExample: false };
+function normalTrackCoordinate(value: unknown, limit: number) {
+  if (typeof value !== "number" || !Number.isFinite(value) || Math.abs(value) > limit) return undefined;
+  // Six decimal places are sufficient for the map and keep the form payload bounded.
+  return Math.max(-limit, Math.min(limit, Number(value.toFixed(6))));
+}
+
+export function normalizeTourRouteTrack(value: unknown): TourRouteTrack | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  let pointCount = 0;
+  const track: TourRouteTrack = [];
+  for (const rawSegment of value) {
+    if (!Array.isArray(rawSegment) || rawSegment.length < 2) return undefined;
+    pointCount += rawSegment.length;
+    if (pointCount > tourRouteTrackPointLimit) return undefined;
+
+    const segment: TourRouteTrack[number] = [];
+    for (const point of rawSegment) {
+      if (!Array.isArray(point) || point.length !== 2) return undefined;
+      const lat = normalTrackCoordinate(point[0], tourRouteLatitudeLimit);
+      const lng = normalTrackCoordinate(point[1], 180);
+      if (lat === undefined || lng === undefined) return undefined;
+      const previous = segment[segment.length - 1];
+      if (!previous || previous[0] !== lat || previous[1] !== lng) segment.push([lat, lng]);
+    }
+    if (segment.length >= 2) track.push(segment);
+  }
+  return track.length ? track : undefined;
+}
+
+export function routeTrackDistanceKm(track: TourRouteTrack) {
+  const radians = Math.PI / 180;
+  const earthRadiusKm = 6_371.0088;
+  let length = 0;
+  for (const segment of track) {
+    for (let index = 1; index < segment.length; index += 1) {
+      const [startLat, startLng] = segment[index - 1];
+      const [endLat, endLng] = segment[index];
+      const latDelta = (endLat - startLat) * radians;
+      const lngDelta = (endLng - startLng) * radians;
+      const haversine = Math.sin(latDelta / 2) ** 2 + Math.sin(lngDelta / 2) ** 2
+        * Math.cos(startLat * radians) * Math.cos(endLat * radians);
+      length += 2 * earthRadiusKm * Math.asin(Math.sqrt(Math.min(1, haversine)));
+    }
+  }
+  return length;
+}
+
+export function getPublicTourRoute(tour: Tour, demo: boolean): {
+  points: LocatedTourRoutePoint[]; track?: TourRouteTrack; isExample: boolean;
+} {
+  if (tour.routePoints || tour.routeTrack) {
+    return { points: tour.routePoints?.filter(isLocatedRoutePoint) ?? [], track: tour.routeTrack, isExample: false };
+  }
   if (demo && tour.slug === "ala-archa") return { points: alaArchaExampleRoute, isExample: true };
   return { points: [], isExample: false };
 }
