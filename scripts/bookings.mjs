@@ -1,8 +1,8 @@
 import { chmodSync, linkSync, lstatSync, mkdtempSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
-import { backup } from "node:sqlite";
-import { assertPrivateDataDirectory, closeBookings, openBookings, storageErrorCode } from "../lib/storage.mjs";
+import { backup, DatabaseSync } from "node:sqlite";
+import { assertPrivateDataDirectory, closeBookings, openBookings, privateDataDirectory, storageErrorCode } from "../lib/storage.mjs";
 
 const [command = "list", argument, ...extra] = process.argv.slice(2);
 const statuses = { confirm: "confirmed", decline: "declined" };
@@ -55,6 +55,30 @@ function updateStatus(db, bookingId, status) {
   else fail(current ? "Заявка уже обработана." : "Заявка не найдена.");
 }
 
+function openBackupSource() {
+  const directory = privateDataDirectory();
+  assertPrivateDataDirectory(directory);
+  const filename = join(directory, "bookings.sqlite");
+  const source = lstatSync(filename, { throwIfNoEntry: false });
+  if (!source) {
+    throw Object.assign(new Error("Backup source is missing"), { code: "MISSING_DATA_FILE" });
+  }
+  if (!source.isFile()) {
+    throw Object.assign(new Error("Backup source must be a regular file"), { code: "INVALID_DATA_FILE" });
+  }
+  const db = new DatabaseSync(filename, { readOnly: true, timeout: 5000 });
+  try {
+    const initialized = db.prepare("SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'bookings'").get();
+    if (!initialized) {
+      throw Object.assign(new Error("Backup source has no booking table"), { code: "INVALID_BACKUP_DATABASE" });
+    }
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
+}
+
 async function backupBookings(db, path) {
   const target = resolve(path);
   const parent = dirname(target);
@@ -95,14 +119,24 @@ async function run() {
         throw Object.assign(new Error("Invalid Next.js environment configuration"), { code: "INVALID_ENV_FILE" });
       },
     });
+    if (command === "backup") {
+      const source = openBackupSource();
+      try {
+        await backupBookings(source, argument);
+      } finally {
+        source.close();
+      }
+      return;
+    }
     const db = openBookings();
     if (command === "list") listBookings(db);
     else if (command === "show") showBooking(db, id);
-    else if (command === "backup") await backupBookings(db, argument);
     else updateStatus(db, id, statuses[command]);
   } catch (error) {
     const code = storageErrorCode(error);
     if (command === "backup" && code === "EEXIST") fail("Файл резервной копии уже существует. Укажите другой путь.");
+    else if (code === "MISSING_DATA_FILE") fail("База заявок не найдена. Проверьте путь в TOO_TURY_DATA_DIR.");
+    else if (code === "INVALID_BACKUP_DATABASE") fail("В выбранной базе нет таблицы заявок. Проверьте путь в TOO_TURY_DATA_DIR.");
     else if (code === "PUBLIC_DATA_DIRECTORY") fail("Используйте закрытый каталог вне public.");
     else fail(`Не удалось выполнить операцию с заявками (${code}). Проверьте каталог и права на запись.`);
   } finally {

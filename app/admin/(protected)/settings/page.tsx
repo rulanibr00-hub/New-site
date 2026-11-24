@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { getSiteSettings } from "@/lib/catalog-store";
+import { telegramDeliveryPaused } from "@/lib/telegram-notifications";
 import { getTelegramSettings } from "@/lib/telegram-store";
 import { SiteSettingsForm } from "@/components/site-settings-form";
 import { TelegramSettingsForm } from "@/components/telegram-settings-form";
@@ -19,7 +20,7 @@ export default async function SiteSettingsPage() {
         </div>
       </header>
       <SiteSettingsForm settings={getSiteSettings()} />
-      <TelegramSettingsForm settings={getTelegramSettings()} />
+      <TelegramSettingsForm settings={getTelegramSettings()} deliveryPaused={telegramDeliveryPaused} />
     </main>
   );
 }

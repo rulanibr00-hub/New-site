@@ -43,7 +43,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                 <span>{name}</span>
               </Link>
               <nav aria-label="Информация">
-                <Link href="/how-it-works">Как это работает</Link>
+                <Link href="/#tours">Каталог туров</Link>
                 <Link href="/about">О нас</Link>
                 <Link href="/contacts">Контакты</Link>
               </nav>

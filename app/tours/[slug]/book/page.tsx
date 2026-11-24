@@ -6,7 +6,7 @@ import "../../../booking.css";
 
 type BookingPageProps = {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ date?: string | string[]; people?: string | string[]; region?: string | string[] }>;
+  searchParams: Promise<{ date?: string | string[]; people?: string | string[]; region?: string | string[]; category?: string | string[] }>;
 };
 
 export const metadata = { title: "Оформление тура" };
@@ -24,6 +24,9 @@ export default async function BookingPage({ params, searchParams }: BookingPageP
   const initialDate = typeof query.date === "string" && canDepart(tour, query.date, today) ? query.date : "";
   const tourQuery = new URLSearchParams();
   if (typeof query.region === "string" && query.region === tour.region) tourQuery.set("region", query.region);
+  if (typeof query.category === "string" && query.category && query.category === tour.category) {
+    tourQuery.set("category", query.category);
+  }
   if (initialDate) tourQuery.set("date", initialDate);
   if (validPeople) tourQuery.set("people", String(requestedPeople));
   const tourHref = `/tours/${tour.slug}${tourQuery.size ? `?${tourQuery}` : ""}`;

@@ -16,7 +16,6 @@ type PublicTourRoute = ReturnType<typeof getPublicTourRoute>;
 const tabs = [
   { id: 'route', label: 'Маршрут' },
   { id: 'included', label: 'Что включено' },
-  { id: 'reviews', label: 'Отзывы' },
 ] as const;
 
 const ratingFormat = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -98,9 +97,11 @@ function TourGallery({ tour }: { tour: Tour }) {
             />
           </button>
         ))}
-        <button aria-haspopup="dialog" className="tour-gallery-all" type="button" onClick={(event) => open(0, event.currentTarget)}>
-          <Images aria-hidden="true" size={19} /> Все фото
-        </button>
+        {photos.length > 1 && (
+          <button aria-haspopup="dialog" className="tour-gallery-all" type="button" onClick={(event) => open(0, event.currentTarget)}>
+            <Images aria-hidden="true" size={19} /> Все фото
+          </button>
+        )}
       </div>
 
       <dialog
@@ -145,7 +146,7 @@ function TourGallery({ tour }: { tour: Tour }) {
   );
 }
 
-function TourSections({ tour, demo, route }: { tour: Tour; demo: boolean; route: PublicTourRoute }) {
+function TourSections({ tour, route }: { tour: Tour; route: PublicTourRoute }) {
   const [active, setActive] = useState(0);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
 
@@ -207,30 +208,20 @@ function TourSections({ tour, demo, route }: { tour: Tour; demo: boolean; route:
             <p>При оформлении можно выбрать доступный вариант поездки и увидеть его стоимость для всей группы.</p>
           </>
         )}
-        {tabs[active].id === 'reviews' && (
-          <>
-            <h2>Оценка тура</h2>
-            {tour.reviewCount > 0 ? (
-              <p>{demo
-                ? 'Рейтинг и число отзывов приведены для примера.'
-                : `Средняя оценка — ${ratingFormat.format(tour.rating)} из 5.`}</p>
-            ) : <p>Пока нет отзывов.</p>}
-          </>
-        )}
       </div>
     </div>
   );
 }
 
 export function TourDetail({ tour, demo, route, catalogHref, bookingHref }: {
-  tour: Tour; demo: boolean; route: PublicTourRoute; catalogHref: string; bookingHref: string;
+  tour: Tour; demo: boolean; route: PublicTourRoute; catalogHref: string; bookingHref: string | null;
 }) {
   const minPrice = Math.min(...tour.options.map(({ pricePerPerson }) => pricePerPerson));
   const hasGuide = tour.options.some(({ guidePerGroup }) => guidePerGroup !== null);
 
   return (
     <main className="shell tour-detail">
-      <Link className="tour-back-link" href={catalogHref}><ArrowLeft aria-hidden="true" size={20} /> Все туры</Link>
+      <Link className="tour-back-link" href={catalogHref}><ArrowLeft aria-hidden="true" size={20} /> К каталогу</Link>
       <TourGallery tour={tour} />
 
       <div className="tour-detail-grid">
@@ -260,11 +251,15 @@ export function TourDetail({ tour, demo, route, catalogHref, bookingHref }: {
           <div className="tour-booking-facts">
             <p><UsersRound aria-hidden="true" size={24} /> {hasGuide ? 'С гидом или без' : `Группа до ${tour.groupLimit} человек`}</p>
           </div>
-          <Link className="button tour-booking-link" href={bookingHref}>Оформить тур <ArrowRight aria-hidden="true" size={22} /></Link>
-          <p className="tour-booking-note">Дата и состав группы при оформлении</p>
+          {bookingHref ? (
+            <>
+              <Link className="button tour-booking-link" href={bookingHref}>Оформить тур <ArrowRight aria-hidden="true" size={22} /></Link>
+              <p className="tour-booking-note">Дата и состав группы при оформлении</p>
+            </>
+          ) : <p className="tour-booking-note">Сейчас нет доступных дат выезда.</p>}
         </aside>
 
-        <TourSections tour={tour} demo={demo} route={route} />
+        <TourSections tour={tour} route={route} />
       </div>
     </main>
   );

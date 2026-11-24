@@ -5,7 +5,7 @@ import {
   bookingStatusLabels, formatBookingTime, formatDepartureDate, getBooking, inboxHref, isBookingId, readBookingFilters,
 } from "@/lib/admin-booking-store";
 import { storageErrorCode } from "@/lib/storage.mjs";
-import { describeTelegramDeliveryError } from "@/lib/telegram-notifications";
+import { describeTelegramDeliveryError, telegramDeliveryPaused } from "@/lib/telegram-notifications";
 import { getTelegramBookingDelivery } from "@/lib/telegram-store";
 import { formatMoney } from "@/lib/tours";
 import { changeBookingStatus, retryBookingTelegram } from "./actions";
@@ -116,13 +116,14 @@ export default async function BookingDetailPage({ params, searchParams }: Bookin
           <>
             <p><strong>{delivery.status ? telegramStatusLabels[delivery.status] : "Уведомление не ставилось в очередь"}</strong></p>
             {deliveryError && <p className="admin-muted">{deliveryError}</p>}
-            {delivery.status === "pending" && deliveryError && !sending && (
+            {telegramDeliveryPaused && <p className="admin-muted">Отправка в Telegram приостановлена настройкой сервера.</p>}
+            {!telegramDeliveryPaused && delivery.status === "pending" && deliveryError && !sending && (
               <p className="admin-muted">Следующая попытка пройдёт автоматически.</p>
             )}
-            {delivery.status === "canceled" && sending && (
+            {!telegramDeliveryPaused && delivery.status === "canceled" && sending && (
               <p className="admin-muted">Дождитесь результата предыдущей попытки.</p>
             )}
-            {retryable && delivery.enabled === 1 && !sending && (
+            {!telegramDeliveryPaused && retryable && delivery.enabled === 1 && !sending && (
               <form action={retryBookingTelegram} className="admin-actions">
                 <input type="hidden" name="id" value={booking.id} />
                 {filters.status && <input type="hidden" name="status" value={filters.status} />}
@@ -131,13 +132,13 @@ export default async function BookingDetailPage({ params, searchParams }: Bookin
                 <p id="telegram-retry-note" className="admin-muted">Сообщение уйдёт в текущий чат из настроек Telegram.</p>
               </form>
             )}
-            {retryable && delivery.enabled === 0 && (
+            {!telegramDeliveryPaused && retryable && delivery.enabled === 0 && (
               <div className="admin-actions">
                 <Link className="admin-secondary" href="/admin/settings">К настройкам Telegram</Link>
                 <p className="admin-muted">Включите уведомления, чтобы повторить отправку.</p>
               </div>
             )}
-            {(delivery.status === "pending" || sending) && (
+            {!telegramDeliveryPaused && (delivery.status === "pending" || sending) && (
               <div className="admin-actions">
                 <a className="admin-secondary" href={inboxHref(filters, id)}>Обновить статус</a>
               </div>

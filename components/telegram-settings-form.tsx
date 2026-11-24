@@ -6,7 +6,7 @@ import type { getTelegramSettings } from "@/lib/telegram-store";
 
 type TelegramSettings = ReturnType<typeof getTelegramSettings>;
 
-export function TelegramSettingsForm({ settings }: { settings: TelegramSettings }) {
+export function TelegramSettingsForm({ settings, deliveryPaused }: { settings: TelegramSettings; deliveryPaused: boolean }) {
   const [saveResult, save, saving] = useActionState(updateTelegramSettings, null);
   const [testResult, test, testing] = useActionState(testTelegramSettings, null);
   const [chatId, setChatId] = useState(settings.chatId);
@@ -38,6 +38,7 @@ export function TelegramSettingsForm({ settings }: { settings: TelegramSettings 
     <details className="admin-panel telegram-settings">
       <summary>Уведомления Telegram</summary>
       <p className="admin-muted">Бот отправляет новые заявки с контактами клиентов в указанный чат.</p>
+      {deliveryPaused && <p className="admin-muted">Отправка в Telegram приостановлена настройкой сервера.</p>}
       <form action={save} onReset={(event) => event.preventDefault()}>
         <input type="hidden" name="revision" value={revision} />
         <input type="hidden" name="enabled" value={enabled && !clearToken ? "on" : "off"} />
@@ -83,7 +84,7 @@ export function TelegramSettingsForm({ settings }: { settings: TelegramSettings 
         </button>
       </form>
       <form action={test} className="telegram-settings__test">
-        <button className="admin-secondary" type="submit" disabled={busy || !savedChatId || !hasToken}>
+        <button className="admin-secondary" type="submit" disabled={deliveryPaused || busy || !savedChatId || !hasToken}>
           {testing ? "Отправляем…" : "Отправить тестовое сообщение"}
         </button>
         <p className="admin-muted">Тест использует сохранённые ID чата и токен.</p>

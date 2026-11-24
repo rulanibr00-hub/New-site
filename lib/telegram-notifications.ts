@@ -31,6 +31,7 @@ const maxReplyBytes = 32 * 1024;
 const pollIntervalMs = 10_000;
 const maxAttempts = 7;
 const maxBatch = 20;
+export const telegramDeliveryPaused = process.env.TOO_TURY_TELEGRAM_PAUSED === "1";
 const dayFormat = new Intl.DateTimeFormat("ru-RU", { timeZone: "UTC", dateStyle: "long" });
 const instantFormat = new Intl.DateTimeFormat("ru-RU", {
   timeZone: "Asia/Bishkek",
@@ -153,6 +154,8 @@ async function sendMessage({ token, chatId }: TelegramCredentials, text: string)
 }
 
 export async function sendTelegramTest(): Promise<{ ok: boolean; message: string }> {
+  if (telegramDeliveryPaused) return { ok: false, message: "Отправка в Telegram приостановлена настройкой сервера." };
+
   try {
     const credentials = getTelegramCredentials();
     if (!credentials) return { ok: false, message: "Сначала сохраните ID чата и токен бота." };
@@ -198,7 +201,7 @@ const shared = globalThis as typeof globalThis & { tooTuryTelegramWorker?: Worke
 const worker = shared.tooTuryTelegramWorker ??= { running: false, started: false };
 
 export function triggerTelegramDelivery() {
-  if (worker.running) return;
+  if (telegramDeliveryPaused || worker.running) return;
   worker.running = true;
   setImmediate(() => {
     void deliverQueuedJobs().catch(() => {
@@ -210,7 +213,7 @@ export function triggerTelegramDelivery() {
 }
 
 export function startTelegramDeliveryWorker() {
-  if (worker.started) return;
+  if (telegramDeliveryPaused || worker.started) return;
   worker.started = true;
   setInterval(triggerTelegramDelivery, pollIntervalMs).unref();
   triggerTelegramDelivery();

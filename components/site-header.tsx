@@ -6,8 +6,7 @@ import { Heart, Menu, Mountain, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 const links = [
-  { href: "/#tours", title: "Туры" },
-  { href: "/how-it-works", title: "Как это работает" },
+  { href: "/#tours", title: "Каталог туров" },
   { href: "/about", title: "О нас" },
   { href: "/contacts", title: "Контакты" },
 ];
@@ -35,15 +34,11 @@ export function SiteHeader({ siteName }: { siteName: string }) {
           <span>{siteName}</span>
         </Link>
         <nav ref={nav} id="site-nav" className={open ? "site-nav is-open" : "site-nav"} aria-label="Основное меню">
-          {links.map(({ href, title }) => {
-            const active = href === "/#tours" ? path === "/" || path.startsWith("/tours/") : path === href;
-
-            return (
-              <Link href={href} key={href} aria-current={active ? "page" : undefined} onClick={() => setOpen(false)}>
-                {title}
-              </Link>
-            );
-          })}
+          {links.map(({ href, title }) => (
+            <Link href={href} key={href} aria-current={path === href ? "page" : undefined} onClick={() => setOpen(false)}>
+              {title}
+            </Link>
+          ))}
         </nav>
         <div className="header-actions">
           <Link href="/favorites" className="favorites-nav" aria-label="Избранное"

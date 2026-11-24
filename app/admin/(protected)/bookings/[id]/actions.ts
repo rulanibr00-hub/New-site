@@ -6,7 +6,7 @@ import { after } from "next/server";
 import { requireAdminAction } from "@/lib/admin-auth";
 import { inboxHref, isBookingId, readBookingFilters, transitionBooking } from "@/lib/admin-booking-store";
 import { storageErrorCode } from "@/lib/storage.mjs";
-import { triggerTelegramDelivery } from "@/lib/telegram-notifications";
+import { telegramDeliveryPaused, triggerTelegramDelivery } from "@/lib/telegram-notifications";
 import { retryTelegramBooking } from "@/lib/telegram-store";
 
 export async function changeBookingStatus(form: FormData) {
@@ -42,7 +42,7 @@ export async function retryBookingTelegram(form: FormData) {
 
   let error: "telegram_unavailable" | "telegram_storage" | undefined;
   try {
-    if (!retryTelegramBooking(id)) error = "telegram_unavailable";
+    if (telegramDeliveryPaused || !retryTelegramBooking(id)) error = "telegram_unavailable";
   } catch (cause) {
     console.error("Не удалось вернуть уведомление Telegram в очередь.", storageErrorCode(cause));
     error = "telegram_storage";

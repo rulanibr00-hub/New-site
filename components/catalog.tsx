@@ -6,14 +6,16 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { canDepart, formatMoney } from "../lib/tours";
+import { canDepart, formatMoney, getUpcomingDepartures } from "../lib/tours";
 import type { Tour } from "../lib/tours";
 import { FavoriteButton, useFavorites } from "./favorites";
 
-type Filters = { region: string; date: string; people: number };
+type Filters = { region: string; date: string; people?: number };
 
-const initialFilters: Filters = { region: "", date: "", people: 2 };
+const initialFilters: Filters = { region: "", date: "" };
 const ratingFormat = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 1 });
+const categoryOrder = new Intl.Collator("ru-RU");
+const peoplePlural = new Intl.PluralRules("ru-RU");
 
 function dayLabel(days: number) {
   if (days % 100 >= 11 && days % 100 <= 14) return "дней";
@@ -23,10 +25,10 @@ function dayLabel(days: number) {
 }
 
 function formatPeople(people: number) {
-  return `${people} ${people >= 2 && people <= 4 ? "человека" : "человек"}`;
+  return `${people} ${peoplePlural.select(people) === "few" ? "человека" : "человек"}`;
 }
 
-function readFilters(params: Pick<URLSearchParams, "get">, regions: string[], today: string, groupSizes: number[]): Filters | null {
+function readFilters(params: Pick<URLSearchParams, "get">, regions: string[], today: string, groupSizes: number[]): Filters {
   const rawRegion = params.get("region") ?? "";
   const region = regions.includes(rawRegion) ? rawRegion : "";
   const rawDate = params.get("date") ?? "";
@@ -36,17 +38,21 @@ function readFilters(params: Pick<URLSearchParams, "get">, regions: string[], to
   const people = Number(rawPeople);
   const hasGroupSize = rawPeople === String(people) && groupSizes.includes(people);
 
-  return region || date || hasGroupSize ? { region, date, people: hasGroupSize ? people : initialFilters.people } : null;
+  return { region, date, people: hasGroupSize ? people : undefined };
 }
 
-function filterQuery(filters: Filters) {
-  const query = new URLSearchParams({ people: String(filters.people) });
+function filterQuery(filters: Filters, category = "") {
+  const query = new URLSearchParams();
+  if (category) query.set("category", category);
   if (filters.region) query.set("region", filters.region);
   if (filters.date) query.set("date", filters.date);
-  return `?${query}`;
+  if (filters.people) query.set("people", String(filters.people));
+  return query.size ? `?${query}` : "";
 }
 
-function TourCard({ tour, search, eager, demo, onRemove }: { tour: Tour; search: string; eager: boolean; demo: boolean; onRemove?: () => void }) {
+function TourCard({ tour, search, eager, demo, hasDepartures, onRemove }: {
+  tour: Tour; search: string; eager: boolean; demo: boolean; hasDepartures: boolean; onRemove?: () => void;
+}) {
   const titleId = useId();
   const durations = [...new Set(tour.options.map((option) => option.days))].sort((a, b) => a - b);
   const longest = durations[durations.length - 1];
@@ -72,6 +78,7 @@ function TourCard({ tour, search, eager, demo, onRemove }: { tour: Tour; search:
             )}
           </div>
           <h3 id={titleId}>{tour.title}</h3>
+          {!hasDepartures && <p className="tour-card__availability">Ближайших выездов пока нет</p>}
           <div className="tour-card__footer">
             <span className="tour-card__duration">
               <Clock3 size={16} aria-hidden="true" />{durationLabel} {dayLabel(longest)}
@@ -88,15 +95,22 @@ function TourCard({ tour, search, eager, demo, onRemove }: { tour: Tour; search:
   );
 }
 
-function Cards({ tours, demo, search = "", onRemove }: { tours: Tour[]; demo: boolean; search?: string; onRemove?: () => void }) {
+function Cards({ tours, today, demo, search = "", onRemove }: {
+  tours: Tour[]; today: string; demo: boolean; search?: string; onRemove?: () => void;
+}) {
   return (
     <div className="tour-grid">
-      {tours.map((tour, index) => <TourCard key={tour.slug} tour={tour} search={search} eager={index === 0} demo={demo} onRemove={onRemove} />)}
+      {tours.map((tour, index) => (
+        <TourCard key={tour.slug} tour={tour} search={search} eager={index === 0} demo={demo}
+          hasDepartures={getUpcomingDepartures(tour, today).length > 0} onRemove={onRemove} />
+      ))}
     </div>
   );
 }
 
-function CatalogSearch({ initial, regions, today, groupSizes, onSearch }: { initial: Filters; regions: string[]; today: string; groupSizes: number[]; onSearch: (filters: Filters) => void }) {
+function CatalogSearch({ initial, regions, today, groupSizes, category, onSearch }: {
+  initial: Filters; regions: string[]; today: string; groupSizes: number[]; category: string; onSearch: (filters: Filters) => void;
+}) {
   const [filters, setFilters] = useState(initial);
 
   function findTours(event: FormEvent<HTMLFormElement>) {
@@ -134,7 +148,10 @@ function CatalogSearch({ initial, regions, today, groupSizes, onSearch }: { init
         <span className="catalog-search__text">
           <span className="catalog-search__label">Участники</span>
           <span className="catalog-search__select">
-            <select name="people" value={filters.people} onChange={(event) => setFilters({ ...filters, people: Number(event.target.value) })}>
+            <select name="people" value={filters.people ?? ""} onChange={(event) => {
+              setFilters({ ...filters, people: Number(event.target.value) || undefined });
+            }}>
+              <option value="">Любое число</option>
               {groupSizes.map((people) => <option key={people} value={people}>{formatPeople(people)}</option>)}
             </select>
             <ChevronDown size={14} aria-hidden="true" />
@@ -142,6 +159,7 @@ function CatalogSearch({ initial, regions, today, groupSizes, onSearch }: { init
         </span>
       </label>
       <button className="button catalog-search__submit" type="submit"><Search size={24} aria-hidden="true" />Найти тур</button>
+      {category && <input type="hidden" name="category" value={category} />}
     </form>
   );
 }
@@ -152,15 +170,19 @@ export function Catalog({ tours, today, headline, tagline, demo }: {
   const params = useSearchParams();
   const heading = useRef<HTMLHeadingElement>(null);
   const regions = [...new Set(tours.map((tour) => tour.region))];
-  const maxGroup = tours.reduce((max, tour) => Math.max(max, tour.groupLimit), 16);
+  const categories = [...new Set(tours.map((tour) => tour.category).filter(Boolean))].sort(categoryOrder.compare);
+  const requestedCategory = params.get("category") ?? "";
+  const category = categories.includes(requestedCategory) ? requestedCategory : "";
+  const maxGroup = tours.reduce((max, tour) => Math.max(max, tour.groupLimit), 0);
   const groupSizes = Array.from({ length: maxGroup }, (_, index) => index + 1);
   const applied = readFilters(params, regions, today, groupSizes);
-  const showAll = params.get("view") === "all";
-  const displayed = applied ? tours.filter((tour) => (
+  const search = filterQuery(applied);
+  const displayed = tours.filter((tour) => (
+    (!category || tour.category === category) &&
     (!applied.region || tour.region === applied.region) &&
-    applied.people <= tour.groupLimit &&
-    (!applied.date || canDepart(tour, applied.date))
-  )) : tours;
+    (!applied.people || applied.people <= tour.groupLimit) &&
+    (!applied.date || canDepart(tour, applied.date, today))
+  ));
 
   function showResults(query: string) {
     const target = `/${query}#tours`;
@@ -183,24 +205,35 @@ export function Catalog({ tours, today, headline, tagline, demo }: {
       </section>
 
       {tours.length > 0 && (
-        <CatalogSearch key={params.toString()} initial={applied ?? initialFilters} regions={regions} today={today} groupSizes={groupSizes} onSearch={(filters) => showResults(filterQuery(filters))} />
+        <CatalogSearch key={search} initial={applied} regions={regions} today={today} groupSizes={groupSizes}
+          category={category} onSearch={(filters) => showResults(filterQuery(filters, category))} />
       )}
 
       <section className="shell catalog-section" id="tours" aria-labelledby="catalog-title">
         <div className="catalog-section__header">
-          <h2 id="catalog-title" tabIndex={-1} ref={heading}>{applied ? "Результаты поиска" : showAll ? "Все туры" : "Популярные туры"}</h2>
-          {!showAll || applied ? (
-            <button className="catalog-section__reset" type="button" onClick={() => showResults("?view=all")}>
-              {applied ? "Сбросить фильтры" : "Все туры"}<ArrowRight size={20} aria-hidden="true" />
+          <h2 id="catalog-title" tabIndex={-1} ref={heading}>Каталог туров</h2>
+          {search && (
+            <button className="catalog-section__reset" type="button" onClick={() => showResults(filterQuery(initialFilters, category))}>
+              Сбросить поиск
             </button>
-          ) : null}
+          )}
         </div>
-        {applied && <p className="catalog-section__result" role="status">Туров найдено: {displayed.length}</p>}
-        {displayed.length ? <Cards tours={displayed} demo={demo} search={applied ? filterQuery(applied) : ""} /> : (
+        {categories.length > 1 && (
+          <nav className="catalog-categories" aria-label="Категории туров">
+            {["", ...categories].map((name) => (
+              <Link key={name} href={`/${filterQuery(applied, name)}#tours`} prefetch={false}
+                aria-current={category === name ? "true" : undefined}>
+                {name || "Все категории"}
+              </Link>
+            ))}
+          </nav>
+        )}
+        {(search || category) && <p className="catalog-section__result" role="status">Туров найдено — {displayed.length}</p>}
+        {displayed.length ? <Cards tours={displayed} today={today} demo={demo} search={filterQuery(applied, category)} /> : (
           <div className="catalog-empty">
             <Search size={32} aria-hidden="true" />
             <h3>{tours.length ? "Туры не найдены" : "Туры скоро появятся"}</h3>
-            {tours.length > 0 && <p>Попробуйте выбрать другую дату, направление или изменить число участников.</p>}
+            {tours.length > 0 && <p>Попробуйте другую категорию или измените параметры поиска.</p>}
           </div>
         )}
       </section>
@@ -208,7 +241,7 @@ export function Catalog({ tours, today, headline, tagline, demo }: {
   );
 }
 
-export function FavoritesCatalog({ tours, demo }: { tours: Tour[]; demo: boolean }) {
+export function FavoritesCatalog({ tours, today, demo }: { tours: Tour[]; today: string; demo: boolean }) {
   const favorites = useFavorites();
   const heading = useRef<HTMLHeadingElement>(null);
   const selected = tours.filter((tour) => favorites.includes(tour.slug));
@@ -218,7 +251,7 @@ export function FavoritesCatalog({ tours, demo }: { tours: Tour[]; demo: boolean
       <div className="catalog-section__header">
         <h1 id="favorites-title" ref={heading} tabIndex={-1}>Избранные туры</h1>
       </div>
-      {selected.length ? <Cards tours={selected} demo={demo} onRemove={() => heading.current?.focus()} /> : (
+      {selected.length ? <Cards tours={selected} today={today} demo={demo} onRemove={() => heading.current?.focus()} /> : (
         <div className="catalog-empty">
           <Heart size={34} aria-hidden="true" />
           <h2>У вас пока нет избранных туров</h2>
