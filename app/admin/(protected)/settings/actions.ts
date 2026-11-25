@@ -24,6 +24,8 @@ export async function updateSiteSettings(previous: SettingsState, form: FormData
       headline: form.get("headline"),
       tagline: form.get("tagline"),
       about: form.get("about"),
+      aboutImage: form.get("aboutImage"),
+      aboutImageCaption: form.get("aboutImageCaption"),
       email: form.get("email"),
       phone: form.get("phone"),
       demo: form.get("demo") === "on",

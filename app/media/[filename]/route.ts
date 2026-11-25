@@ -1,5 +1,5 @@
 import { isAdmin } from "@/lib/admin-auth";
-import { isPublishedTourPhoto } from "@/lib/catalog-store";
+import { isPublishedPhoto } from "@/lib/catalog-store";
 import { storageErrorCode } from "@/lib/storage.mjs";
 import { isTourMediaFilename, openTourMedia } from "@/lib/tour-media";
 
@@ -19,7 +19,7 @@ async function respond(request: Request, { params }: MediaContext, head: boolean
 
   try {
     const path = `/media/${filename}`;
-    const isPublic = isPublishedTourPhoto(path);
+    const isPublic = isPublishedPhoto(path);
     if (!isPublic && !await isAdmin()) return notFound();
 
     const media = await openTourMedia(filename);
@@ -58,7 +58,7 @@ async function respond(request: Request, { params }: MediaContext, head: boolean
       throw error;
     }
   } catch (error) {
-    console.error("Не удалось открыть фотографию тура.", storageErrorCode(error));
+    console.error("Не удалось открыть фотографию.", storageErrorCode(error));
     return new Response(null, { status: 500, headers: privateHeaders });
   }
 }

@@ -129,6 +129,8 @@ body:has(.admin-root) .demo-notice { display: none; }
 .admin-media-note { color: var(--muted); font-size: .86rem; line-height: 1.5; }
 .admin-media-error { color: #8a2f21; }
 .admin-media-upload { max-width: 100%; }
+.admin-about-photo { display: grid; align-content: start; gap: 8px; min-width: 0; }
+.admin-about-photo .admin-media-preview { max-width: 420px; }
 
 @media (max-width: 760px) {
   .admin-shell { display: block; }

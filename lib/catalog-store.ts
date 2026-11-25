@@ -23,6 +23,8 @@ export type SiteSettings = {
   headline: string;
   tagline: string;
   about: string;
+  aboutImage: string;
+  aboutImageCaption: string;
   email: string;
   phone: string;
   demo: boolean;
@@ -58,6 +60,8 @@ const defaultSettings = {
   headline: "Откройте Кыргызстан",
   tagline: "Горные маршруты, озёра и ночёвки в юртах.",
   about: "«Тоо Туры» помогает выбрать поездку по Кыргызстану. В каталоге можно сравнить однодневные прогулки, туры к озёрам и маршруты с ночёвкой в горах.\n\nВ каждом туре есть программа и список включённых услуг. Перед отправкой заявки вы увидите стоимость поездки для своей группы.",
+  aboutImage: "",
+  aboutImageCaption: "",
   phone: "",
   demo: true,
 };
@@ -373,15 +377,17 @@ export function getPublishedTour(slug: string, { includeRouteTrack = true }: { i
   return row ? publicTour(row) : null;
 }
 
-export function isPublishedTourPhoto(path: string) {
+export function isPublishedPhoto(path: string) {
   return Boolean(ensureCatalog().prepare(`
+    SELECT 1 FROM site_settings WHERE id = 1 AND json_extract(content, '$.aboutImage') = ?
+    UNION ALL
     SELECT 1 FROM catalog_tours
     WHERE published IS NOT NULL AND (
       json_extract(published, '$.image') = ? OR
       EXISTS (SELECT 1 FROM json_each(published, '$.gallery') WHERE value = ?)
     )
     LIMIT 1
-  `).get(path, path));
+  `).get(path, path, path));
 }
 
 function requireRevision(expectedRevision: number) {
@@ -433,7 +439,7 @@ export function unpublishManagedTour(slug: string, expectedRevision: number): Ma
 }
 
 function siteSettings(row: SettingsRow): SiteSettings {
-  return { ...(JSON.parse(row.content) as SettingsContent), revision: row.revision };
+  return { ...defaultSettings, email: "", ...(JSON.parse(row.content) as Partial<SettingsContent>), revision: row.revision };
 }
 
 export function getSiteSettings(): SiteSettings {
@@ -453,16 +459,25 @@ export function saveSiteSettings(input: unknown, expectedRevision: number): Site
     if (!phonePattern.test(phone) || digits < 7 || digits > 15) throw new CatalogError("Укажите корректный номер телефона.");
   }
   if (typeof data.demo !== "boolean") throw new CatalogError("Укажите режим работы каталога.");
+  const db = ensureCatalog();
+  const current = db.prepare("SELECT content, revision FROM site_settings WHERE id = 1 AND revision = ?")
+    .get(expectedRevision) as SettingsRow | undefined;
+  if (!current) throw new CatalogError("Настройки уже изменены. Обновите страницу и повторите действие.");
+  const previous = siteSettings(current);
   const content: SettingsContent = {
     name: text(data.name, "Название сайта", 70, required),
     headline: text(data.headline, "Заголовок главной", 120, required),
     tagline: text(data.tagline, "Подзаголовок главной", 240, required),
     about: text(data.about, "О нас", 6000, { multiline: true }),
+    aboutImage: data.aboutImage == null ? previous.aboutImage : readPhoto(data.aboutImage, "Фотография для страницы О нас"),
+    aboutImageCaption: data.aboutImageCaption == null
+      ? previous.aboutImageCaption
+      : text(data.aboutImageCaption, "Подпись к фотографии", 200),
     email,
     phone,
     demo: data.demo,
   };
-  const row = ensureCatalog().prepare(`
+  const row = db.prepare(`
     UPDATE site_settings SET content = ?, revision = revision + 1
     WHERE id = 1 AND revision = ? RETURNING content, revision
   `).get(JSON.stringify(content), expectedRevision) as SettingsRow | undefined;

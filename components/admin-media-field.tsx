@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, ImagePlus, Trash2 } from "lucide-react";
+import { supportedImageTypes, uploadAdminImage } from "@/lib/admin-media-upload";
 
 type Props = {
   image: string;
@@ -11,44 +12,7 @@ type Props = {
   disabled?: boolean;
 };
 
-const supported = "image/jpeg,image/png,image/webp";
-const maxBytes = 8 * 1024 * 1024;
 const galleryLimit = 12;
-const pathPattern = /^\/media\/[0-9a-f]{32}\.webp$/;
-
-function fileType(file: File) {
-  if (supported.split(",").includes(file.type)) return file.type;
-  const suffix = file.name.split(".").pop()?.toLowerCase();
-  if (!file.type && (suffix === "jpg" || suffix === "jpeg")) return "image/jpeg";
-  if (!file.type && (suffix === "png" || suffix === "webp")) return `image/${suffix}`;
-  throw new Error("Выберите фотографию в формате JPEG, PNG или WebP.");
-}
-
-async function uploadFile(file: File) {
-  if (!file.size || file.size > maxBytes) {
-    throw new Error("Размер фотографии должен быть больше нуля и не больше 8 МБ.");
-  }
-  const type = fileType(file);
-  let response: Response;
-  try {
-    response = await fetch("/api/admin/media", {
-      method: "POST",
-      headers: { "Content-Type": type },
-      body: file,
-      signal: AbortSignal.timeout(60_000),
-    });
-  } catch {
-    throw new Error("Загрузка прервалась. Попробуйте ещё раз.");
-  }
-  const result: unknown = await response.json().catch(() => null);
-  if (response.ok && typeof result === "object" && result !== null && "path" in result
-    && typeof result.path === "string" && pathPattern.test(result.path)) {
-    return result.path;
-  }
-  const message = typeof result === "object" && result !== null && "error" in result && typeof result.error === "string"
-    ? result.error : "Не удалось загрузить фотографию. Попробуйте ещё раз.";
-  throw new Error(message);
-}
 
 export function AdminMediaField({ image, gallery, onChange, onBusyChange, disabled }: Props) {
   const cover = useRef<HTMLInputElement>(null);
@@ -75,7 +39,7 @@ export function AdminMediaField({ image, gallery, onChange, onBusyChange, disabl
     const uploaded: string[] = [];
     try {
       for (const file of files) {
-        uploaded.push(await uploadFile(file));
+        uploaded.push(await uploadAdminImage(file));
       }
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Загрузка прервалась. Попробуйте ещё раз.");
@@ -114,7 +78,7 @@ export function AdminMediaField({ image, gallery, onChange, onBusyChange, disabl
               </button>
             )}
           </div>
-          <input hidden ref={cover} type="file" accept={supported} aria-label="Файл обложки" disabled={locked} onChange={(event) => void handleFiles(event.currentTarget, "cover")} />
+          <input hidden ref={cover} type="file" accept={supportedImageTypes} aria-label="Файл обложки" disabled={locked} onChange={(event) => void handleFiles(event.currentTarget, "cover")} />
         </div>
         <div className="admin-media-item">
           <h3>Галерея</h3>
@@ -139,7 +103,7 @@ export function AdminMediaField({ image, gallery, onChange, onBusyChange, disabl
           <button type="button" className="admin-secondary admin-media-control admin-media-upload" disabled={locked || gallery.length >= galleryLimit} onClick={() => pictures.current?.click()}>
             <ImagePlus size={17} aria-hidden="true" /> Добавить фото
           </button>
-          <input hidden ref={pictures} type="file" accept={supported} multiple aria-label="Файлы галереи" disabled={locked} onChange={(event) => void handleFiles(event.currentTarget, "gallery")} />
+          <input hidden ref={pictures} type="file" accept={supportedImageTypes} multiple aria-label="Файлы галереи" disabled={locked} onChange={(event) => void handleFiles(event.currentTarget, "gallery")} />
         </div>
       </div>
       <p className="admin-media-note">JPEG, PNG или WebP, до 8 МБ и 25 Мп на фотографию. В галерее до {galleryLimit} фото.</p>
