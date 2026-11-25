@@ -2,6 +2,7 @@
 
 import { ArrowDown, ArrowUp, MapPin, Plus, Trash2 } from "lucide-react";
 import { useId, useMemo, useRef, useState } from "react";
+import { AdminRoutePlaceSearch } from "@/components/admin-route-place-search";
 import { AdminRouteTrackField } from "@/components/admin-route-track-field";
 import { RouteLeaflet } from "@/components/route-leaflet";
 import { TourRouteMap } from "@/components/tour-route-map";
@@ -24,6 +25,14 @@ type Props = {
 };
 
 type MapEdit = "add" | { move: number };
+
+function formatPointCoordinates(lat: number, lng: number) {
+  const rounded = Number(lat.toFixed(6));
+  return {
+    lat: String(Math.max(-tourRouteLatitudeLimit, Math.min(tourRouteLatitudeLimit, rounded))),
+    lng: lng.toFixed(6),
+  };
+}
 
 export function AdminRouteEditor({ initialPoints, initialTrack, disabled, onTrackBusyChange }: Props) {
   const formId = useId();
@@ -56,11 +65,11 @@ export function AdminRouteEditor({ initialPoints, initialTrack, disabled, onTrac
     ? JSON.stringify(points.map(({ title, note, lat, lng }) => ({ title, note, lat, lng })))
     : "";
 
-  function addPoint(lat = "", lng = "", focusTitle = false) {
+  function addPoint({ lat = "", lng = "", title = "", focusTitle = false } = {}) {
     if (!canAdd) return;
 
     const key = nextKey.current++;
-    setPoints((current) => current.length >= tourRoutePointLimit ? current : [...current, { key, title: "", note: "", lat, lng }]);
+    setPoints((current) => current.length >= tourRoutePointLimit ? current : [...current, { key, title, note: "", lat, lng }]);
     setSelectedKey(key);
     setMapEdit(undefined);
     setEdited(true);
@@ -77,15 +86,13 @@ export function AdminRouteEditor({ initialPoints, initialTrack, disabled, onTrac
   function pickCoordinates(lat: number, lng: number) {
     if (!canPick || !mapEdit) return;
 
-    const rounded = Number(lat.toFixed(6));
-    const latitude = String(Math.max(-tourRouteLatitudeLimit, Math.min(tourRouteLatitudeLimit, rounded)));
-    const longitude = lng.toFixed(6);
+    const coordinates = formatPointCoordinates(lat, lng);
     if (mapEdit === "add") {
-      addPoint(latitude, longitude, true);
+      addPoint({ ...coordinates, focusTitle: true });
       return;
     }
     setPoints((current) => current.map((point) => point.key === mapEdit.move
-      ? { ...point, lat: latitude, lng: longitude }
+      ? { ...point, ...coordinates }
       : point));
     setEdited(true);
     setMapEdit(undefined);
@@ -133,6 +140,10 @@ export function AdminRouteEditor({ initialPoints, initialTrack, disabled, onTrac
       <input type="hidden" name="routePoints" value={payload} />
       <div className="admin-route-content">
         <p className="admin-tour-note">Первая точка отмечает место встречи. Расставьте остальные остановки в порядке поездки.</p>
+        <AdminRoutePlaceSearch disabled={!canAdd} onSelect={(place) => {
+          addPoint({ ...formatPointCoordinates(place.lat, place.lng), title: place.name });
+          requestAnimationFrame(() => document.getElementById(mapHint)?.focus());
+        }} />
         <div className="admin-route-toolbar">
           <div className="admin-route-actions">
             <button type="button" className="admin-secondary admin-route-mode"
@@ -146,7 +157,7 @@ export function AdminRouteEditor({ initialPoints, initialTrack, disabled, onTrac
               <MapPin size={16} aria-hidden="true" /> Перенести точку на карте
             </button>
           </div>
-          <p id={mapHint} className="admin-tour-note" role="status">
+          <p id={mapHint} className="admin-tour-note" role="status" tabIndex={-1}>
             {mapEdit === "add" ? "Нажмите на карте, чтобы поставить новую точку."
               : mapEdit ? `Укажите новое место для точки «${selectedLabel}».`
                 : selected ? `Выбрана точка «${selectedLabel}».` : "Выберите отметку на карте или добавьте новую точку."}
@@ -169,7 +180,7 @@ export function AdminRouteEditor({ initialPoints, initialTrack, disabled, onTrac
           </div>
         )}
         <div className="admin-route-actions">
-          <button ref={addButton} type="button" className="admin-secondary" onClick={() => addPoint("", "", true)} disabled={!canAdd}>
+          <button ref={addButton} type="button" className="admin-secondary" onClick={() => addPoint({ focusTitle: true })} disabled={!canAdd}>
             <Plus size={16} aria-hidden="true" /> Добавить точку вручную
           </button>
           <span className="admin-tour-note" role="status">Точек на карте {mapPoints.length} из {points.length}</span>

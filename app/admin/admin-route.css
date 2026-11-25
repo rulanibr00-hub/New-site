@@ -22,6 +22,50 @@
   gap: 8px;
 }
 
+.admin-route-search,
+.admin-route-search-results {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-route-search-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.admin-route-search-controls button,
+.admin-route-search-option.admin-secondary {
+  min-height: 44px;
+}
+
+.admin-route-search-results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-route-search-option.admin-secondary {
+  display: grid;
+  justify-content: stretch;
+  gap: 3px;
+  width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.admin-route-search-option small {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.admin-route-search-credit {
+  color: var(--forest);
+  text-decoration: underline;
+}
+
 .admin-route-mode[aria-pressed="true"] {
   border-color: var(--forest);
   background: #e1f0e7;

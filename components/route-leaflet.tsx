@@ -62,7 +62,7 @@ export function RouteLeaflet({
   const canvas = useRef<HTMLDivElement>(null);
   const geometry = useRef({ points, track });
   const handlers = useRef({ onSelect, onPick });
-  const lastFitTrack = useRef(track);
+  const previousView = useRef({ track, hasStops: points.length > 0 });
   const [runtime, setRuntime] = useState<MapRuntime | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "tiles-failed" | "unavailable">("loading");
   const coordinates = useMemo<TourRouteTrack | undefined>(() => (
@@ -97,7 +97,7 @@ export function RouteLeaflet({
       });
       map = instance;
       fitRoute(instance, leaflet, geometry.current);
-      lastFitTrack.current = geometry.current.track;
+      previousView.current = { track: geometry.current.track, hasStops: geometry.current.points.length > 0 };
       instance.createPane(routePane).style.zIndex = "410";
       instance.attributionControl.setPrefix(false);
       leaflet.control.zoom({
@@ -152,10 +152,13 @@ export function RouteLeaflet({
   }, [allowPageScroll]);
 
   useEffect(() => {
-    if (!runtime || track === lastFitTrack.current) return;
-    lastFitTrack.current = track;
-    fitRoute(runtime.map, runtime.leaflet, geometry.current);
-  }, [runtime, track]);
+    if (!runtime) return;
+    const hasStops = points.length > 0;
+    const needsOverview = track !== previousView.current.track
+      || (!track && hasStops && !previousView.current.hasStops);
+    previousView.current = { track, hasStops };
+    if (needsOverview) fitRoute(runtime.map, runtime.leaflet, geometry.current);
+  }, [points.length, runtime, track]);
 
   useEffect(() => {
     if (!runtime) return;
