@@ -13,7 +13,10 @@ function readTourFields(data: FormData, existingSlug: string | null) {
   const optionGuides = data.getAll("optionGuides");
   const stepTitles = data.getAll("stepTitles");
   const stepDescriptions = data.getAll("stepDescriptions");
-  const includes = data.get("includes");
+  const lines = (name: string) => {
+    const value = data.get(name);
+    return typeof value === "string" ? value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : [];
+  };
 
   return {
     slug: existingSlug ?? data.get("slug"),
@@ -31,7 +34,13 @@ function readTourFields(data: FormData, existingSlug: string | null) {
     gallery: data.getAll("gallery"),
     routePoints: data.get("routePoints"),
     routeTrack: data.get("routeTrack"),
-    includes: typeof includes === "string" ? includes.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : [],
+    includes: lines("includes"),
+    excludes: lines("excludes"),
+    bring: lines("bring"),
+    difficulty: data.get("difficulty"),
+    minAge: data.get("minAge"),
+    meetingPoint: data.get("meetingPoint"),
+    cancellation: data.get("cancellation"),
     options: data.getAll("optionIds").map((id, index) => ({
       id, days: optionDays[index], pricePerPerson: optionPrices[index], guidePerGroup: optionGuides[index],
     })),

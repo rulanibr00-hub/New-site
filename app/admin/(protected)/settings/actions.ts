@@ -28,6 +28,9 @@ export async function updateSiteSettings(previous: SettingsState, form: FormData
       aboutImageCaption: form.get("aboutImageCaption"),
       email: form.get("email"),
       phone: form.get("phone"),
+      whatsapp: form.get("whatsapp"),
+      telegram: form.get("telegram"),
+      instagram: form.get("instagram"),
       demo: form.get("demo") === "on",
     }, revision);
 

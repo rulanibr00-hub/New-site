@@ -3,11 +3,12 @@ import { randomUUID } from "node:crypto";
 import { lstatSync } from "node:fs";
 import { resolve } from "node:path";
 import { type DatabaseSync } from "node:sqlite";
+import { reviewStats } from "./review-store";
 import { openBookings } from "./storage.mjs";
 import { isStoredTourMediaPath, storedTourMediaExists } from "./tour-media";
 import {
-  getToday, normalizeTourRouteTrack, parseRouteCoordinate, tourRouteLatitudeLimit, tourRoutePointLimit,
-  tourRouteTrackPayloadLimit, tours, type Tour, type TourOption, type TourRoutePoint, type TourRouteTrack,
+  getToday, normalizeTourRouteTrack, parseRouteCoordinate, tourDifficulties, tourRouteLatitudeLimit, tourRoutePointLimit,
+  tourRouteTrackPayloadLimit, tours, type Tour, type TourDifficulty, type TourOption, type TourRoutePoint, type TourRouteTrack,
 } from "./tours";
 
 export type ManagedTour = {
@@ -27,6 +28,9 @@ export type SiteSettings = {
   aboutImageCaption: string;
   email: string;
   phone: string;
+  whatsapp: string;
+  telegram: string;
+  instagram: string;
   demo: boolean;
   revision: number;
 };
@@ -50,6 +54,10 @@ const bundledPhotoPattern = /^\/tours\/[a-z0-9-]+\.webp$/;
 const calendarDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 const emailPattern = /^[^\s@<>"?#&%]+@[^\s@<>"?#&%]+\.[^\s@<>"?#&%]+$/;
 const phonePattern = /^\+?[\d\p{Zs}()-]+$/u;
+const telegramHandlePattern = /^[A-Za-z][A-Za-z0-9_]{4,31}$/;
+const instagramHandlePattern = /^(?!.*\.\.)[A-Za-z0-9._]{1,30}$/;
+// Settings saved before messengers were added do not contain these fields.
+const settingsFallback = { email: "", whatsapp: "", telegram: "", instagram: "" };
 const controlCharacters = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u;
 const initialized = new WeakSet<DatabaseSync>();
 const tourColumns = "draft, published, revision, published_revision, updated_at";
@@ -203,6 +211,17 @@ function hasAvailableDeparture(days: number[], startDate?: string, endDate?: str
   return false;
 }
 
+function readDifficulty(value: unknown): TourDifficulty | undefined {
+  const difficulty = text(value, "Сложность", 20);
+  if (!difficulty) return undefined;
+  if (!Object.hasOwn(tourDifficulties, difficulty)) throw new CatalogError("Выберите сложность из списка.");
+  return difficulty as TourDifficulty;
+}
+
+function readLines(value: unknown, label: string) {
+  return [...new Set(items(value, label, 24).map((item) => text(item, label, 200)).filter(Boolean))];
+}
+
 function readOption(value: unknown): TourOption {
   const entry = asRecord(value, "Вариант тура");
   const id = text(entry.id, "Код варианта", 64) || randomUUID();
@@ -321,7 +340,13 @@ function readTour(input: Record<string, unknown>, slug: string, publish: boolean
     groupLimit,
     weekdays,
     options,
-    includes: [...new Set(items(input.includes, "Что включено", 24).map((item) => text(item, "Что включено", 200)).filter(Boolean))],
+    includes: readLines(input.includes, "Что включено"),
+    excludes: readLines(input.excludes, "Что не входит в стоимость"),
+    bring: readLines(input.bring, "Что взять с собой"),
+    difficulty: readDifficulty(input.difficulty),
+    minAge: integer(input.minAge, "Минимальный возраст", 0, 99) || undefined,
+    meetingPoint: text(input.meetingPoint, "Место встречи", 200),
+    cancellation: text(input.cancellation, "Условия отмены", 1500, { multiline: true }),
     program: readProgram(input.program, publish),
     routePoints: readRoutePoints(input.routePoints, publish, previous?.routePoints),
     routeTrack: readRouteTrack(input.routeTrack, previous?.routeTrack),
@@ -342,7 +367,10 @@ function managedTour(row: TourRow): ManagedTour {
 
 function publicTour(row: PublishedRow): Tour {
   const tour = JSON.parse(row.published) as Tour;
-  return row.demo ? tour : { ...tour, rating: 0, reviewCount: 0 };
+  if (row.demo) return tour;
+  // Outside the demo mode only approved guest reviews count towards the rating.
+  const { count, average } = reviewStats(tour.slug);
+  return { ...tour, rating: average ?? 0, reviewCount: count };
 }
 
 export function listManagedTours(): ManagedTour[] {
@@ -439,7 +467,13 @@ export function unpublishManagedTour(slug: string, expectedRevision: number): Ma
 }
 
 function siteSettings(row: SettingsRow): SiteSettings {
-  return { ...defaultSettings, email: "", ...(JSON.parse(row.content) as Partial<SettingsContent>), revision: row.revision };
+  return { ...defaultSettings, ...settingsFallback, ...(JSON.parse(row.content) as Partial<SettingsContent>), revision: row.revision };
+}
+
+function readHandle(value: unknown, label: string, pattern: RegExp, urlPrefix: RegExp) {
+  const handle = text(value, label, 120).replace(urlPrefix, "").replace(/^@/, "").replace(/\/+$/, "");
+  if (handle && !pattern.test(handle)) throw new CatalogError(`Проверьте имя пользователя в поле «${label}».`);
+  return handle;
 }
 
 export function getSiteSettings(): SiteSettings {
@@ -458,6 +492,15 @@ export function saveSiteSettings(input: unknown, expectedRevision: number): Site
     const digits = phone.replace(/\D/g, "").length;
     if (!phonePattern.test(phone) || digits < 7 || digits > 15) throw new CatalogError("Укажите корректный номер телефона.");
   }
+  const whatsapp = text(data.whatsapp, "WhatsApp", 48);
+  if (whatsapp) {
+    const digits = whatsapp.replace(/\D/g, "").length;
+    if (!phonePattern.test(whatsapp) || digits < 7 || digits > 15) {
+      throw new CatalogError("Укажите номер WhatsApp в международном формате, например +996 555 123 456.");
+    }
+  }
+  const telegram = readHandle(data.telegram, "Telegram", telegramHandlePattern, /^(?:https?:\/\/)?(?:t\.me|telegram\.me)\//i);
+  const instagram = readHandle(data.instagram, "Instagram", instagramHandlePattern, /^(?:https?:\/\/)?(?:www\.)?instagram\.com\//i);
   if (typeof data.demo !== "boolean") throw new CatalogError("Укажите режим работы каталога.");
   const db = ensureCatalog();
   const current = db.prepare("SELECT content, revision FROM site_settings WHERE id = 1 AND revision = ?")
@@ -475,6 +518,9 @@ export function saveSiteSettings(input: unknown, expectedRevision: number): Site
       : text(data.aboutImageCaption, "Подпись к фотографии", 200),
     email,
     phone,
+    whatsapp,
+    telegram,
+    instagram,
     demo: data.demo,
   };
   const row = db.prepare(`

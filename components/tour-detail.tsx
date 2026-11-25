@@ -7,8 +7,10 @@ import {
   ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, Clock3,
   Images, MapPin, Star, UsersRound, X,
 } from 'lucide-react';
-import { formatMoney, type getPublicTourRoute, type Tour } from '../lib/tours';
+import type { PublicReview } from '../lib/review-types';
+import { formatMoney, tourDifficulties, type getPublicTourRoute, type Tour } from '../lib/tours';
 import { FavoriteButton } from './favorites';
+import { ReviewForm } from './review-form';
 import { TourRouteMap } from './tour-route-map';
 
 type PublicTourRoute = ReturnType<typeof getPublicTourRoute>;
@@ -16,7 +18,15 @@ type PublicTourRoute = ReturnType<typeof getPublicTourRoute>;
 const tabs = [
   { id: 'route', label: 'Маршрут' },
   { id: 'included', label: 'Что включено' },
+  { id: 'details', label: 'Важно знать' },
+  { id: 'reviews', label: 'Отзывы' },
 ] as const;
+
+const reviewDate = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long', timeZone: 'Asia/Bishkek' });
+
+function hasDetails(tour: Tour) {
+  return Boolean(tour.meetingPoint || tour.bring?.length || tour.excludes?.length || tour.cancellation);
+}
 
 const ratingFormat = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
@@ -146,17 +156,18 @@ function TourGallery({ tour }: { tour: Tour }) {
   );
 }
 
-function TourSections({ tour, route }: { tour: Tour; route: PublicTourRoute }) {
+function TourSections({ tour, route, reviews }: { tour: Tour; route: PublicTourRoute; reviews: PublicReview[] }) {
   const [active, setActive] = useState(0);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
+  const visibleTabs = tabs.filter(({ id }) => id !== 'details' || hasDetails(tour));
 
   function handleKeys(event: KeyboardEvent<HTMLDivElement>) {
     let next: number;
     switch (event.key) {
-      case 'ArrowLeft': next = (active - 1 + tabs.length) % tabs.length; break;
-      case 'ArrowRight': next = (active + 1) % tabs.length; break;
+      case 'ArrowLeft': next = (active - 1 + visibleTabs.length) % visibleTabs.length; break;
+      case 'ArrowRight': next = (active + 1) % visibleTabs.length; break;
       case 'Home': next = 0; break;
-      case 'End': next = tabs.length - 1; break;
+      case 'End': next = visibleTabs.length - 1; break;
       default: return;
     }
     event.preventDefault();
@@ -167,7 +178,7 @@ function TourSections({ tour, route }: { tour: Tour; route: PublicTourRoute }) {
   return (
     <div className="tour-sections">
       <div aria-label="Информация о туре" className="tour-tabs" onKeyDown={handleKeys} role="tablist">
-        {tabs.map(({ id, label }, index) => (
+        {visibleTabs.map(({ id, label }, index) => (
           <button
             aria-controls="tour-section-panel"
             aria-selected={index === active}
@@ -183,8 +194,8 @@ function TourSections({ tour, route }: { tour: Tour; route: PublicTourRoute }) {
           </button>
         ))}
       </div>
-      <div aria-labelledby={`tour-tab-${tabs[active].id}`} id="tour-section-panel" role="tabpanel" tabIndex={0}>
-        {tabs[active].id === 'route' && (
+      <div aria-labelledby={`tour-tab-${visibleTabs[active].id}`} id="tour-section-panel" role="tabpanel" tabIndex={0}>
+        {visibleTabs[active].id === 'route' && (
           <>
             <p className="tour-description" style={{ whiteSpace: 'pre-line' }}>{tour.description}</p>
             {(route.points.length > 0 || Boolean(route.track?.length)) && <TourRouteMap {...route} />}
@@ -199,7 +210,7 @@ function TourSections({ tour, route }: { tour: Tour; route: PublicTourRoute }) {
             </ol>
           </>
         )}
-        {tabs[active].id === 'included' && (
+        {visibleTabs[active].id === 'included' && (
           <>
             <h2>В стоимости тура</h2>
             {tour.includes.length > 0 ? <ul className="tour-includes">
@@ -208,13 +219,67 @@ function TourSections({ tour, route }: { tour: Tour; route: PublicTourRoute }) {
             <p>При оформлении можно выбрать доступный вариант поездки и увидеть его стоимость для всей группы.</p>
           </>
         )}
+        {visibleTabs[active].id === 'details' && (
+          <>
+            <h2>Важно знать</h2>
+            {tour.meetingPoint && (
+              <>
+                <h3>Место встречи</h3>
+                <p>{tour.meetingPoint}</p>
+              </>
+            )}
+            {tour.bring && tour.bring.length > 0 && (
+              <>
+                <h3>Что взять с собой</h3>
+                <ul className="tour-includes">
+                  {tour.bring.map((item) => <li key={item}><Check aria-hidden="true" size={20} /> {item}</li>)}
+                </ul>
+              </>
+            )}
+            {tour.excludes && tour.excludes.length > 0 && (
+              <>
+                <h3>Не входит в стоимость</h3>
+                <ul className="tour-includes">
+                  {tour.excludes.map((item) => <li key={item}><X aria-hidden="true" size={20} /> {item}</li>)}
+                </ul>
+              </>
+            )}
+            {tour.cancellation && (
+              <>
+                <h3>Условия отмены</h3>
+                <p style={{ whiteSpace: 'pre-line' }}>{tour.cancellation}</p>
+              </>
+            )}
+          </>
+        )}
+        {visibleTabs[active].id === 'reviews' && (
+          <>
+            <h2>Отзывы гостей</h2>
+            {reviews.length > 0 ? (
+              <ul className="tour-reviews">
+                {reviews.map((review) => (
+                  <li key={review.id}>
+                    <div className="tour-review-head">
+                      <strong>{review.author}</strong>
+                      <span role="img" aria-label={`Оценка ${review.rating} из 5`}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</span>
+                      {review.verified && <span className="tour-review-badge">Участник поездки</span>}
+                      <time dateTime={review.createdAt}>{reviewDate.format(new Date(review.createdAt))}</time>
+                    </div>
+                    <p style={{ whiteSpace: 'pre-line' }}>{review.body}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : <p>Отзывов пока нет. Станьте первым, кто поделится впечатлениями.</p>}
+            <ReviewForm tourSlug={tour.slug} />
+          </>
+        )}
       </div>
     </div>
   );
 }
 
-export function TourDetail({ tour, demo, route, catalogHref, bookingHref }: {
-  tour: Tour; demo: boolean; route: PublicTourRoute; catalogHref: string; bookingHref: string | null;
+export function TourDetail({ tour, demo, route, reviews, catalogHref, bookingHref }: {
+  tour: Tour; demo: boolean; route: PublicTourRoute; reviews: PublicReview[]; catalogHref: string; bookingHref: string | null;
 }) {
   const minPrice = Math.min(...tour.options.map(({ pricePerPerson }) => pricePerPerson));
   const hasGuide = tour.options.some(({ guidePerGroup }) => guidePerGroup !== null);
@@ -237,6 +302,8 @@ export function TourDetail({ tour, demo, route, catalogHref, bookingHref }: {
             )}
             <span><Clock3 aria-hidden="true" size={21} /> {durationLabel(tour)}</span>
             <span>Выезд · {tour.departure}</span>
+            {tour.difficulty && <span>Сложность · {tourDifficulties[tour.difficulty]}</span>}
+            {tour.minAge ? <span>Возраст · от {tour.minAge} лет</span> : null}
           </div>
         </div>
 
@@ -259,7 +326,7 @@ export function TourDetail({ tour, demo, route, catalogHref, bookingHref }: {
           ) : <p className="tour-booking-note">Сейчас нет доступных дат выезда.</p>}
         </aside>
 
-        <TourSections tour={tour} route={route} />
+        <TourSections tour={tour} route={route} reviews={reviews} />
       </div>
     </main>
   );

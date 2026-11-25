@@ -5,6 +5,7 @@ import { Mountain } from "lucide-react";
 import { FavoritesProvider } from "@/components/favorites";
 import { SiteHeader } from "@/components/site-header";
 import { getSiteSettings } from "@/lib/catalog-store";
+import { instagramUrl, telegramUrl, whatsappUrl } from "@/lib/messengers";
 import { publicSiteUrl } from "@/lib/site";
 import "./globals.css";
 import "./catalog.css";
@@ -21,7 +22,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   await connection();
-  const { name, demo } = getSiteSettings();
+  const { name, demo, whatsapp, telegram, instagram } = getSiteSettings();
   return (
     <html lang="ru">
       <body>
@@ -45,7 +46,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               <nav aria-label="Информация">
                 <Link href="/#tours">Каталог туров</Link>
                 <Link href="/about">О нас</Link>
+                <Link href="/faq">Вопросы и ответы</Link>
                 <Link href="/contacts">Контакты</Link>
+                {whatsapp && <a href={whatsappUrl(whatsapp)} target="_blank" rel="noopener noreferrer">WhatsApp</a>}
+                {telegram && <a href={telegramUrl(telegram)} target="_blank" rel="noopener noreferrer">Telegram</a>}
+                {instagram && <a href={instagramUrl(instagram)} target="_blank" rel="noopener noreferrer">Instagram</a>}
               </nav>
             </div>
           </footer>

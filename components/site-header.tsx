@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 const links = [
   { href: "/#tours", title: "Каталог туров" },
   { href: "/about", title: "О нас" },
+  { href: "/faq", title: "Вопросы и ответы" },
   { href: "/contacts", title: "Контакты" },
 ];
 

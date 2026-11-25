@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Clock, MapPin, Minus, Plus, Users } from "lucide-react";
+import { hasMessenger, telegramUrl, whatsappUrl, type MessengerHandles } from "../lib/messengers";
 import { canDepart, formatMoney, getUpcomingDepartures, priceTour, type Tour } from "../lib/tours";
 
 type BookingFormProps = {
@@ -14,6 +15,7 @@ type BookingFormProps = {
   initialPeople: number;
   initialDate: string;
   tourHref: string;
+  messengers: MessengerHandles;
 };
 
 type BookingField = "date" | "name" | "contact" | "parameters";
@@ -33,7 +35,7 @@ function durationLabel(days: number) {
   return `${days} ${form === "one" ? "день" : form === "few" ? "дня" : "дней"}`;
 }
 
-export function BookingForm({ tour, demo, today, initialPeople, initialDate, tourHref }: BookingFormProps) {
+export function BookingForm({ tour, demo, today, initialPeople, initialDate, tourHref, messengers }: BookingFormProps) {
   const router = useRouter();
   const [optionId, setOptionId] = useState(tour.options[0].id);
   const [people, setPeople] = useState(initialPeople);
@@ -192,6 +194,7 @@ export function BookingForm({ tour, demo, today, initialPeople, initialDate, tou
   }
 
   if (receipt) {
+    const message = `Здравствуйте! Моя заявка ${receipt.id}: ${tour.title}, выезд ${dateFormat.format(new Date(receipt.date))}, ${people} чел. Хочу уточнить детали.`;
     return (
       <div className="shell booking-shell">
         <div className="booking-success">
@@ -204,6 +207,18 @@ export function BookingForm({ tour, demo, today, initialPeople, initialDate, tou
             <div><dt>Стоимость за группу</dt><dd>{formatMoney(receipt.total)}</dd></div>
             <div><dt>Номер заявки</dt><dd>{receipt.id}</dd></div>
           </dl>
+          <p>Сохраните номер заявки: по нему организатор быстро найдёт вашу поездку.</p>
+          {hasMessenger(messengers) && (
+            <div className="booking-contact-actions">
+              <p>Чтобы ускорить подтверждение, напишите организатору. Сообщение с номером заявки уже подготовлено.</p>
+              {messengers.whatsapp && (
+                <a className="button" href={whatsappUrl(messengers.whatsapp, message)} target="_blank" rel="noopener noreferrer">Написать в WhatsApp</a>
+              )}
+              {messengers.telegram && (
+                <a className="button" href={telegramUrl(messengers.telegram, message)} target="_blank" rel="noopener noreferrer">Написать в Telegram</a>
+              )}
+            </div>
+          )}
           <Link className="button booking-submit" href="/#tours">К каталогу <ArrowRight aria-hidden="true" size={18} /></Link>
         </div>
       </div>

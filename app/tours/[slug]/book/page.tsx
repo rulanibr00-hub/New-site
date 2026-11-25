@@ -31,9 +31,12 @@ export default async function BookingPage({ params, searchParams }: BookingPageP
   if (validPeople) tourQuery.set("people", String(requestedPeople));
   const tourHref = `/tours/${tour.slug}${tourQuery.size ? `?${tourQuery}` : ""}`;
 
+  const { demo, whatsapp, telegram, instagram } = getSiteSettings();
+
   return (
     <main>
-      <BookingForm tour={tour} demo={getSiteSettings().demo} today={today} initialPeople={initialPeople} initialDate={initialDate} tourHref={tourHref} />
+      <BookingForm tour={tour} demo={demo} today={today} initialPeople={initialPeople} initialDate={initialDate} tourHref={tourHref}
+        messengers={{ whatsapp, telegram, instagram }} />
     </main>
   );
 }
