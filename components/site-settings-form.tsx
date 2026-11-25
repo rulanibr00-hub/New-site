@@ -47,7 +47,17 @@ export function SiteSettingsForm({ settings }: { settings: SiteSettings }) {
           <label className="admin-field">Телефон
             <input name="phone" type="tel" maxLength={48} value={values.phone} onChange={(event) => change("phone", event.target.value)} />
           </label>
+          <label className="admin-field">WhatsApp
+            <input name="whatsapp" type="tel" maxLength={48} placeholder="+996 555 123 456" value={values.whatsapp} onChange={(event) => change("whatsapp", event.target.value)} />
+          </label>
+          <label className="admin-field">Telegram
+            <input name="telegram" maxLength={120} placeholder="username" value={values.telegram} onChange={(event) => change("telegram", event.target.value)} />
+          </label>
+          <label className="admin-field">Instagram
+            <input name="instagram" maxLength={120} placeholder="username" value={values.instagram} onChange={(event) => change("instagram", event.target.value)} />
+          </label>
         </div>
+        <p className="admin-muted">Номер WhatsApp укажите в международном формате. В Telegram и Instagram можно вставить имя пользователя или ссылку на профиль.</p>
         <label className="admin-check">
           <input type="checkbox" checked={values.demo} onChange={(event) => change("demo", event.target.checked)} />
           <span>Демонстрационный режим</span>

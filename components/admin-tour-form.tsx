@@ -6,7 +6,7 @@ import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { AdminMediaField } from "@/components/admin-media-field";
 import { AdminRouteEditor } from "@/components/admin-route-editor";
 import type { ManagedTour } from "@/lib/catalog-store";
-import type { Tour } from "@/lib/tours";
+import { tourDifficulties, type Tour } from "@/lib/tours";
 import "../app/admin/tours.css";
 
 export type AdminTourState = {
@@ -85,6 +85,14 @@ export function AdminTourForm({ record, action }: Props) {
   ));
   const nextStepKey = useRef(steps.length);
   const [includes, setIncludes] = useState(initial?.includes.join("\n") ?? "");
+  const [conditions, setConditions] = useState({
+    difficulty: initial?.difficulty ?? "",
+    minAge: fieldNumber(initial?.minAge),
+    meetingPoint: initial?.meetingPoint ?? "",
+    bring: initial?.bring?.join("\n") ?? "",
+    excludes: initial?.excludes?.join("\n") ?? "",
+    cancellation: initial?.cancellation ?? "",
+  });
   const [photos, setPhotos] = useState({ image: initial?.image ?? "", gallery: initial?.gallery ?? [] });
   const [uploading, setUploading] = useState(false);
   const [importingTrack, setImportingTrack] = useState(false);
@@ -287,6 +295,42 @@ export function AdminTourForm({ record, action }: Props) {
             <label htmlFor={`${formId}-includes`}>Что включено</label>
             <textarea id={`${formId}-includes`} name="includes" maxLength={4850} rows={4} aria-describedby={`${formId}-includes-help`} value={includes} onChange={(event) => setIncludes(event.target.value)} />
             <small id={`${formId}-includes-help`}>По одной услуге в строке.</small>
+          </div>
+        </section>
+
+        <section className="admin-panel admin-tour-section" aria-labelledby={`${formId}-conditions`}>
+          <h2 id={`${formId}-conditions`}>Условия поездки</h2>
+          <p className="admin-tour-note">Необязательные поля. Заполненные поля появятся на странице тура во вкладке «Важно знать».</p>
+          <div className="admin-grid">
+            <label className="admin-field">
+              <span>Сложность</span>
+              <select name="difficulty" value={conditions.difficulty} onChange={(event) => setConditions({ ...conditions, difficulty: event.target.value })}>
+                <option value="">Не указана</option>
+                {Object.entries(tourDifficulties).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
+            <label className="admin-field">
+              <span>Минимальный возраст</span>
+              <input type="number" name="minAge" min={0} max={99} value={conditions.minAge} onChange={(event) => setConditions({ ...conditions, minAge: event.target.value })} />
+            </label>
+            <label className="admin-field admin-tour-wide">
+              <span>Место встречи</span>
+              <input name="meetingPoint" maxLength={200} value={conditions.meetingPoint} onChange={(event) => setConditions({ ...conditions, meetingPoint: event.target.value })} />
+            </label>
+            <div className="admin-field">
+              <label htmlFor={`${formId}-bring`}>Что взять с собой</label>
+              <textarea id={`${formId}-bring`} name="bring" rows={4} maxLength={4850} value={conditions.bring} onChange={(event) => setConditions({ ...conditions, bring: event.target.value })} />
+              <small>По одному пункту в строке.</small>
+            </div>
+            <div className="admin-field">
+              <label htmlFor={`${formId}-excludes`}>Что не входит в стоимость</label>
+              <textarea id={`${formId}-excludes`} name="excludes" rows={4} maxLength={4850} value={conditions.excludes} onChange={(event) => setConditions({ ...conditions, excludes: event.target.value })} />
+              <small>По одному пункту в строке.</small>
+            </div>
+            <label className="admin-field admin-tour-wide">
+              <span>Условия отмены</span>
+              <textarea name="cancellation" rows={3} maxLength={1500} value={conditions.cancellation} onChange={(event) => setConditions({ ...conditions, cancellation: event.target.value })} />
+            </label>
           </div>
         </section>
       </fieldset>

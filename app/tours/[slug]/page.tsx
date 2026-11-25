@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
 import { TourDetail } from '../../../components/tour-detail';
 import { getPublishedTour, getSiteSettings } from '../../../lib/catalog-store';
+import { listApprovedReviews } from '../../../lib/review-store';
 import { canDepart, getPublicTourRoute, getToday, getUpcomingDepartures } from '../../../lib/tours';
 import '../../detail.css';
 
@@ -53,6 +54,7 @@ export default async function TourPage({ params, searchParams }: PageProps) {
       tour={{ ...tour, routeTrack: undefined }}
       demo={demo}
       route={getPublicTourRoute(tour, demo)}
+      reviews={listApprovedReviews(tour.slug)}
       catalogHref={`/${query}#tours`}
       bookingHref={bookingHref}
     />

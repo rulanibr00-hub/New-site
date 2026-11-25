@@ -21,6 +21,9 @@ export const tourRouteTrackPayloadLimit = 650_000;
 // The Web Mercator projection used by the map tiles stops short of the poles.
 export const tourRouteLatitudeLimit = 85.05112878;
 
+export const tourDifficulties = { easy: "Лёгкий", moderate: "Средний", hard: "Сложный" } as const;
+export type TourDifficulty = keyof typeof tourDifficulties;
+
 export type Tour = {
   slug: string;
   title: string;
@@ -39,6 +42,12 @@ export type Tour = {
   endDate?: string;
   options: TourOption[];
   includes: string[];
+  excludes?: string[];
+  bring?: string[];
+  difficulty?: TourDifficulty;
+  minAge?: number;
+  meetingPoint?: string;
+  cancellation?: string;
   program: { time: string; title: string; description: string }[];
   routePoints?: TourRoutePoint[];
   routeTrack?: TourRouteTrack;

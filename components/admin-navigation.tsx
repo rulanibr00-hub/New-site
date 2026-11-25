@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarCheck2, Map, Settings } from "lucide-react";
+import { CalendarCheck2, Map, Settings, Star } from "lucide-react";
 
 const sections = [
   { href: "/admin/tours", text: "Туры", Icon: Map },
   { href: "/admin/bookings", text: "Заявки", Icon: CalendarCheck2 },
+  { href: "/admin/reviews", text: "Отзывы", Icon: Star },
   { href: "/admin/settings", text: "Настройки сайта", Icon: Settings },
 ];
 
